@@ -111,78 +111,179 @@ onMounted(() => {
     <aside class="sidebar" :class="{ open: isSidebarOpen }">
       <div class="brand">
         <div class="logo"><img src="/dswdlogo_notext.png" alt="DSWD Logo"></div><span>PSB · RMS</span>
-        <button class="ml-auto md:hidden" type="button" aria-label="Close menu" @click="isSidebarOpen = false"><AppIcon name="close" class="h-5 w-5" /></button>
+        <button class="ml-auto md:hidden" type="button" aria-label="Close menu" @click="isSidebarOpen = false">
+          <AppIcon name="close" class="h-5 w-5" />
+        </button>
       </div>
       <nav class="scrollable flex-1 space-y-1.5 overflow-y-auto px-3 py-5" aria-label="Main navigation">
-        <button v-for="item in navigation" :key="item.label" type="button" class="nav-item" :class="{ active: item.route === 'referrals' }" @click="navigate(item)">
-          <AppIcon :name="item.icon" class="h-5 w-5 shrink-0" /><span>{{ item.label }}</span><span v-if="item.badge" class="badge">{{ item.badge }}</span>
+        <button v-for="item in navigation" :key="item.label" type="button" class="nav-item"
+          :class="{ active: item.route === 'referrals' }" @click="navigate(item)">
+          <AppIcon :name="item.icon" class="h-5 w-5 shrink-0" /><span>{{ item.label }}</span><span v-if="item.badge"
+            class="badge">{{ item.badge }}</span>
         </button>
       </nav>
       <div class="profile">
-        <div class="avatar">MR</div><div class="min-w-0"><p class="truncate text-xs text-white/90">M. D. Reyes</p><p class="text-[11px] text-white/50">PSB · Admin</p></div>
-        <button class="ml-auto text-white/40 hover:text-white" type="button" aria-label="Log out" @click="router.push({ name: 'login' })"><AppIcon name="logout" class="h-4 w-4" /></button>
+        <div class="avatar">MR</div>
+        <div class="min-w-0">
+          <p class="truncate text-xs text-white/90">M. D. Reyes</p>
+          <p class="text-[11px] text-white/50">PSB · Admin</p>
+        </div>
+        <button class="ml-auto text-white/40 hover:text-white" type="button" aria-label="Log out"
+          @click="router.push({ name: 'login' })">
+          <AppIcon name="logout" class="h-4 w-4" />
+        </button>
       </div>
     </aside>
 
     <div class="flex min-w-0 flex-1 flex-col">
       <header class="topbar">
         <div class="flex min-w-0 items-center gap-3">
-          <button class="menu-button md:hidden" type="button" aria-label="Open menu" @click="isSidebarOpen = true"><AppIcon name="menu" class="h-5 w-5" /></button>
-          <div><h1 class="text-xl font-semibold tracking-tight text-gray-800">Referrals</h1><p class="text-sm text-gray-400">Manage and track all referral cases</p></div>
+          <button class="menu-button md:hidden" type="button" aria-label="Open menu" @click="isSidebarOpen = true">
+            <AppIcon name="menu" class="h-5 w-5" />
+          </button>
+          <div>
+            <h1 class="text-xl font-semibold tracking-tight text-gray-800">Referrals</h1>
+            <p class="text-sm text-gray-400">Manage and track all referral cases</p>
+          </div>
         </div>
-        <button class="primary-button" type="button" @click="openModal"><AppIcon name="plus" class="h-4 w-4" /><span class="hidden sm:inline">New Referral</span></button>
+        <button class="primary-button" type="button" @click="openModal">
+          <AppIcon name="plus" class="h-4 w-4" /><span class="hidden sm:inline">New Referral</span>
+        </button>
       </header>
 
       <main class="scrollable flex-1 overflow-y-auto bg-[#f0f4f8] p-4 sm:p-5 lg:p-6">
         <section class="filter-card" aria-label="Referral filters">
-          <label class="search-input"><AppIcon name="search" class="h-4 w-4 text-gray-400" /><input v-model="searchQuery" type="search" placeholder="Search by name, ID, or case..."></label>
+          <label class="search-input">
+            <AppIcon name="search" class="h-4 w-4 text-gray-400" /><input v-model="searchQuery" type="search"
+              placeholder="Search by name, ID, or case...">
+          </label>
           <div class="flex flex-wrap gap-2">
-            <select v-model="statusFilter" class="control"><option>All Status</option><option>For Action</option><option>In Progress</option><option>Completed</option><option>Archived</option></select>
-            <select v-model="sortOrder" class="control"><option value="newest">Sort: Newest</option><option value="oldest">Sort: Oldest</option></select>
+            <select v-model="statusFilter" class="control">
+              <option>All Status</option>
+              <option>For Action</option>
+              <option>In Progress</option>
+              <option>Completed</option>
+              <option>Archived</option>
+            </select>
+            <select v-model="sortOrder" class="control">
+              <option value="newest">Sort: Newest</option>
+              <option value="oldest">Sort: Oldest</option>
+            </select>
           </div>
         </section>
 
         <section class="table-card">
           <div class="overflow-x-auto">
             <table class="w-full min-w-[650px]">
-              <thead><tr><th>Referral ID</th><th>Client Name</th><th>Type</th><th>Date</th><th>Status</th><th class="text-right">Action</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Referral ID</th>
+                  <th>Client Name</th>
+                  <th>Type</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th class="text-right">Action</th>
+                </tr>
+              </thead>
               <tbody>
                 <tr v-for="referral in filteredReferrals" :key="referral.id">
-                  <td class="font-medium text-[#003366]">{{ referral.id }}</td><td>{{ referral.client }}</td><td class="text-gray-500">{{ referral.type }}</td><td class="text-gray-400">{{ referral.date }}</td>
-                  <td><span class="status" :class="statusClass(referral.status)">{{ referral.status }}</span></td><td class="text-right"><button class="font-medium text-blue-600 hover:text-blue-800" type="button">View</button></td>
+                  <td class="font-medium text-[#003366]">{{ referral.id }}</td>
+                  <td>{{ referral.client }}</td>
+                  <td class="text-gray-500">{{ referral.type }}</td>
+                  <td class="text-gray-400">{{ referral.date }}</td>
+                  <td><span class="status" :class="statusClass(referral.status)">{{ referral.status }}</span></td>
+                  <td class="text-right"><button class="font-medium text-blue-600 hover:text-blue-800"
+                      type="button">View</button></td>
                 </tr>
-                <tr v-if="!filteredReferrals.length"><td colspan="6" class="py-10 text-center text-gray-400">No referrals found.</td></tr>
+                <tr v-if="!filteredReferrals.length">
+                  <td colspan="6" class="py-10 text-center text-gray-400">No referrals found.</td>
+                </tr>
               </tbody>
             </table>
           </div>
-          <div class="table-footer"><span>Showing {{ filteredReferrals.length }} of {{ referrals.length }} referrals</span><div class="flex gap-1"><button disabled>Previous</button><button class="current">1</button><button disabled>Next</button></div></div>
+          <div class="table-footer"><span>Showing {{ filteredReferrals.length }} of {{ referrals.length }}
+              referrals</span>
+            <div class="flex gap-1"><button disabled>Previous</button><button class="current">1</button><button
+                disabled>Next</button></div>
+          </div>
         </section>
       </main>
     </div>
 
-    <div v-if="isModalOpen" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" @click.self="closeModal">
+    <div v-if="isModalOpen" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title"
+      @click.self="closeModal">
       <div class="modal">
-        <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4 sm:px-6"><div><h2 id="modal-title" class="text-lg font-semibold text-gray-800">Create New Referral</h2><p class="text-xs text-gray-400">Step {{ currentStep }} of 4 · {{ steps[currentStep - 1] }}</p></div><button type="button" class="text-2xl text-gray-400" aria-label="Close" @click="closeModal">×</button></div>
-        <div class="stepper"><template v-for="step in 4" :key="step"><span class="step" :class="{ active: step === currentStep, completed: step < currentStep }">{{ step < currentStep ? '✓' : step }}</span><span v-if="step < 4" class="step-line" :class="{ completed: step < currentStep }"></span></template></div>
+        <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4 sm:px-6">
+          <div>
+            <h2 id="modal-title" class="text-lg font-semibold text-gray-800">Create New Referral</h2>
+            <p class="text-xs text-gray-400">Step {{ currentStep }} of 4 · {{ steps[currentStep - 1] }}</p>
+          </div><button type="button" class="text-2xl text-gray-400" aria-label="Close" @click="closeModal">×</button>
+        </div>
+        <div class="stepper"><template v-for="step in 4" :key="step"><span class="step"
+              :class="{ active: step === currentStep, completed: step < currentStep }">{{ step < currentStep ? '✓' :
+                step }}</span><span v-if="step < 4" class="step-line"
+                  :class="{ completed: step < currentStep }"></span></template>
+        </div>
 
         <form class="px-5 pb-5 sm:px-6 sm:pb-6" @submit.prevent="submitReferral">
           <div v-if="currentStep === 1" class="form-grid">
-            <label>First Name *<input v-model="form.firstName" type="text"></label><label>Last Name *<input v-model="form.lastName" type="text"></label><label>Middle Name<input v-model="form.middleName" type="text"></label><label>Date of Birth *<input v-model="form.birthDate" type="date"></label>
-            <label>Gender *<select v-model="form.gender"><option value="" disabled>Select gender</option><option>Female</option><option>Male</option><option>Prefer not to say</option></select></label><label>Contact Number *<input v-model="form.contact" type="tel"></label><label class="sm:col-span-2">Email Address<input v-model="form.email" type="email"></label>
+            <label>First Name *<input v-model="form.firstName" type="text"></label><label>Last Name *<input
+                v-model="form.lastName" type="text"></label><label>Middle Name<input v-model="form.middleName"
+                type="text"></label><label>Date of Birth *<input v-model="form.birthDate" type="date"></label>
+            <label>Gender *<select v-model="form.gender">
+                <option value="" disabled>Select gender</option>
+                <option>Female</option>
+                <option>Male</option>
+                <option>Prefer not to say</option>
+              </select></label><label>Contact Number *<input v-model="form.contact" type="tel"></label><label
+              class="sm:col-span-2">Email Address<input v-model="form.email" type="email"></label>
           </div>
           <div v-else-if="currentStep === 2" class="form-grid">
-            <label>House/Unit Number<input v-model="form.houseNumber" type="text"></label><label>Barangay *<input v-model="form.barangay" type="text"></label><label>City/Municipality *<input v-model="form.city" type="text"></label><label>Province *<input v-model="form.province" type="text"></label><label>Postal Code<input v-model="form.postalCode" type="text"></label>
+            <label>House/Unit Number<input v-model="form.houseNumber" type="text"></label><label>Barangay *<input
+                v-model="form.barangay" type="text"></label><label>City/Municipality *<input v-model="form.city"
+                type="text"></label><label>Province *<input v-model="form.province" type="text"></label><label>Postal
+              Code<input v-model="form.postalCode" type="text"></label>
           </div>
           <div v-else-if="currentStep === 3" class="form-grid">
-            <label>Type of Referral *<select v-model="form.type"><option value="" disabled>Select type</option><option>Child Welfare</option><option>Senior Citizen</option><option>Disability</option><option>Women's Welfare</option><option>Other</option></select></label>
-            <label>Priority Level *<select v-model="form.priority"><option value="" disabled>Select priority</option><option>Normal</option><option>Urgent</option><option>Critical</option></select></label>
-            <label class="sm:col-span-2">Referral Summary *<textarea v-model="form.summary" rows="3"></textarea></label><label class="sm:col-span-2">Assigned To<select v-model="form.assignedTo"><option value="">Unassigned</option><option>Social Worker A</option><option>Social Worker B</option></select></label>
+            <label>Type of Referral *<select v-model="form.type">
+                <option value="" disabled>Select type</option>
+                <option>Child Welfare</option>
+                <option>Senior Citizen</option>
+                <option>Disability</option>
+                <option>Women's Welfare</option>
+                <option>Other</option>
+              </select></label>
+            <label>Priority Level *<select v-model="form.priority">
+                <option value="" disabled>Select priority</option>
+                <option>Normal</option>
+                <option>Urgent</option>
+                <option>Critical</option>
+              </select></label>
+            <label class="sm:col-span-2">Referral Summary *<textarea v-model="form.summary"
+                rows="3"></textarea></label><label class="sm:col-span-2">Assigned To<select v-model="form.assignedTo">
+                <option value="">Unassigned</option>
+                <option>Social Worker A</option>
+                <option>Social Worker B</option>
+              </select></label>
           </div>
           <div v-else class="form-grid">
-            <label>Memorandum Number *<input v-model="form.memoNumber" type="text" placeholder="MEMO-2026-001"></label><label>Memorandum Date *<input v-model="form.memoDate" type="date"></label><label class="sm:col-span-2">Memorandum Subject *<input v-model="form.memoSubject" type="text"></label><label class="sm:col-span-2">Memorandum Details<textarea v-model="form.memoDetails" rows="3"></textarea></label><label class="sm:col-span-2">Attachments<input type="file" multiple @change="handleFiles"></label>
+            <label>Memorandum Number *<input v-model="form.memoNumber" type="text"
+                placeholder="MEMO-2026-001"></label><label>Memorandum Date *<input v-model="form.memoDate"
+                type="date"></label><label class="sm:col-span-2">Memorandum Subject *<input v-model="form.memoSubject"
+                type="text"></label><label class="sm:col-span-2">Memorandum Details<textarea v-model="form.memoDetails"
+                rows="3"></textarea></label><label class="sm:col-span-2">Attachments<input type="file" multiple
+                @change="handleFiles"></label>
           </div>
-          <p v-if="formError" class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">{{ formError }}</p>
-          <div class="mt-6 flex items-center justify-between border-t border-gray-100 pt-4"><button v-if="currentStep > 1" type="button" class="secondary-button" @click="currentStep--; formError = ''">Previous</button><span v-else></span><div class="flex gap-2"><button type="button" class="secondary-button" @click="closeModal">Cancel</button><button v-if="currentStep < 4" type="button" class="primary-button" @click="nextStep">Next</button><button v-else type="submit" class="primary-button">Submit Referral</button></div></div>
+          <p v-if="formError" class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">{{ formError
+            }}</p>
+          <div class="mt-6 flex items-center justify-between border-t border-gray-100 pt-4"><button
+              v-if="currentStep > 1" type="button" class="secondary-button"
+              @click="currentStep--; formError = ''">Previous</button><span v-else></span>
+            <div class="flex gap-2"><button type="button" class="secondary-button"
+                @click="closeModal">Cancel</button><button v-if="currentStep < 4" type="button" class="primary-button"
+                @click="nextStep">Next</button><button v-else type="submit" class="primary-button">Submit
+                Referral</button></div>
+          </div>
         </form>
       </div>
     </div>

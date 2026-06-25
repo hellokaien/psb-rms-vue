@@ -193,7 +193,7 @@ const removeItem = (item) => {
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  border-radius: 0.75rem;
+  border-radius: 999rem;
   background: #c9a83e;
   padding: 0.6rem 1rem;
   color: white;

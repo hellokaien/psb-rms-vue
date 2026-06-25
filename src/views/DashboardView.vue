@@ -79,7 +79,8 @@ const runQuickAction = (action) => {
       </div>
 
       <nav class="scrollable flex-1 space-y-1.5 overflow-y-auto px-3 py-5" aria-label="Main navigation">
-        <button v-for="item in navigation" :key="item.label" type="button" class="sidebar-item" :class="{ active: item.active }" @click="openNavigation(item)">
+        <button v-for="item in navigation" :key="item.label" type="button" class="sidebar-item"
+          :class="{ active: item.active }" @click="openNavigation(item)">
           <AppIcon :name="item.icon" class="h-5 w-5 shrink-0" />
           <span>{{ item.label }}</span>
           <span v-if="item.badge" class="nav-badge">{{ item.badge }}</span>
@@ -116,8 +117,12 @@ const runQuickAction = (action) => {
             <AppIcon name="search" class="h-4 w-4 text-gray-400" />
             <input v-model="searchQuery" type="search" placeholder="Search referrals...">
           </label>
-          <button class="round-button hidden sm:grid" type="button" aria-label="Notifications"><AppIcon name="bell" class="h-5 w-5" /></button>
-          <button class="primary-button" type="button" @click="openNewReferral"><AppIcon name="plus" class="h-4 w-4" /><span class="hidden sm:inline">New Referral</span></button>
+          <button class="round-button hidden sm:grid" type="button" aria-label="Notifications">
+            <AppIcon name="bell" class="h-5 w-5" />
+          </button>
+          <button class="primary-button" type="button" @click="openNewReferral">
+            <AppIcon name="plus" class="h-4 w-4" /><span class="hidden sm:inline">New Referral</span>
+          </button>
         </div>
       </header>
 
@@ -126,11 +131,14 @@ const runQuickAction = (action) => {
           <article v-for="stat in stats" :key="stat.label" class="stat-card">
             <div class="flex items-center justify-between gap-2">
               <span class="text-xs font-medium text-gray-400 sm:text-sm">{{ stat.label }}</span>
-              <span class="stat-icon" :class="`stat-${stat.color}`"><AppIcon :name="stat.icon" class="h-5 w-5" /></span>
+              <span class="stat-icon" :class="`stat-${stat.color}`">
+                <AppIcon :name="stat.icon" class="h-5 w-5" />
+              </span>
             </div>
             <p class="mt-1 text-2xl font-semibold text-gray-800">{{ stat.value }}</p>
             <span class="mt-1 flex items-center gap-1 text-xs text-gray-400">
-              <AppIcon v-if="stat.label !== 'For Action'" name="arrowUp" class="h-3 w-3 text-green-500" />{{ stat.detail }}
+              <AppIcon v-if="stat.label !== 'For Action'" name="arrowUp" class="h-3 w-3 text-green-500" />{{ stat.detail
+              }}
             </span>
           </article>
         </section>
@@ -138,38 +146,53 @@ const runQuickAction = (action) => {
         <div class="grid gap-5 lg:grid-cols-3">
           <section class="content-card lg:col-span-2">
             <div class="mb-4 flex items-center justify-between">
-              <h2 class="flex items-center gap-2 text-sm font-semibold text-gray-700"><AppIcon name="referrals" class="h-4 w-4 text-[#c9a83e]" />Recent Referrals</h2>
-              <button type="button" class="text-xs font-medium text-[#003366] hover:text-[#c9a83e]" @click="router.push({ name: 'referrals' })">View all →</button>
+              <h2 class="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                <AppIcon name="referrals" class="h-4 w-4 text-[#c9a83e]" />Recent Referrals
+              </h2>
+              <button type="button" class="text-xs font-medium text-[#003366] hover:text-[#c9a83e]"
+                @click="router.push({ name: 'referrals' })">View all →</button>
             </div>
             <div v-if="filteredReferrals.length" class="space-y-3">
               <button v-for="referral in filteredReferrals" :key="referral.id" type="button" class="referral-row">
                 <span class="min-w-0 text-left">
-                  <span class="block truncate text-sm font-medium text-gray-700">{{ referral.id }} · {{ referral.client }}</span>
-                  <span class="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">{{ referral.date }}<span class="status-pill" :class="`status-${referral.tone}`">{{ referral.status }}</span></span>
+                  <span class="block truncate text-sm font-medium text-gray-700">{{ referral.id }} · {{ referral.client
+                    }}</span>
+                  <span class="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">{{ referral.date }}<span
+                      class="status-pill" :class="`status-${referral.tone}`">{{ referral.status }}</span></span>
                 </span>
                 <span class="text-gray-300">›</span>
               </button>
             </div>
-            <p v-else class="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">No referrals match “{{ searchQuery }}”.</p>
+            <p v-else class="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">No referrals match “{{
+              searchQuery }}”.</p>
           </section>
 
           <section class="content-card flex flex-col">
-            <h2 class="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-700"><AppIcon name="bolt" class="h-4 w-4 text-[#c9a83e]" />Quick Actions</h2>
+            <h2 class="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-700">
+              <AppIcon name="bolt" class="h-4 w-4 text-[#c9a83e]" />Quick Actions
+            </h2>
             <div class="grid grid-cols-2 gap-2.5">
-              <button v-for="action in quickActions" :key="action.label" type="button" class="quick-action" :class="`quick-${action.tone}`" @click="runQuickAction(action)">
+              <button v-for="action in quickActions" :key="action.label" type="button" class="quick-action"
+                :class="`quick-${action.tone}`" @click="runQuickAction(action)">
                 <AppIcon :name="action.icon" class="h-5 w-5" /><span>{{ action.label }}</span>
               </button>
             </div>
             <div class="mt-5 border-t border-gray-100 pt-4 text-xs text-gray-400">
-              <p class="flex items-center gap-2"><AppIcon name="lock" class="h-4 w-4 text-[#c9a83e]" />6 active users · 2 pending invites</p>
-              <p class="mt-2 flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-green-400"></span>All systems operational</p>
+              <p class="flex items-center gap-2">
+                <AppIcon name="lock" class="h-4 w-4 text-[#c9a83e]" />6 active users · 2 pending invites
+              </p>
+              <p class="mt-2 flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-green-400"></span>All
+                systems operational</p>
             </div>
           </section>
         </div>
 
-        <footer class="mt-6 flex items-center justify-between border-t border-gray-200/60 pt-4 text-[11px] text-gray-400">
+        <footer
+          class="mt-6 flex items-center justify-between border-t border-gray-200/60 pt-4 text-[11px] text-gray-400">
           <span>PSB Referral Management · v2.0</span>
-          <span class="flex items-center gap-2"><AppIcon name="lock" class="h-3.5 w-3.5" />Secured by Google OAuth</span>
+          <span class="flex items-center gap-2">
+            <AppIcon name="lock" class="h-3.5 w-3.5" />Secured by Google OAuth
+          </span>
         </footer>
       </main>
     </div>
