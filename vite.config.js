@@ -4,13 +4,25 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import vueDevTools from 'vite-plugin-vue-devtools'
+import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+    strictPort: true,
+  },
+  preview: {
+    host: '0.0.0.0',
+    port: 4173,
+    strictPort: true,
+  },
   plugins: [
     vue(),
     vueJsx(),
     vueDevTools(),
+    tailwindcss(),
   ],
   resolve: {
     alias: {
