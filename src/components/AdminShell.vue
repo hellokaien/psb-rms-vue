@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from './AppIcon.vue'
+import { useAuthStore } from '../stores/auth'
 
 defineProps({
   activeRoute: { type: String, required: true },
@@ -10,7 +11,9 @@ defineProps({
 })
 
 const router = useRouter()
+const authStore = useAuthStore()
 const isSidebarOpen = ref(false)
+const showLogoutConfirm = ref(false)
 const navigation = [
   { label: 'Dashboard', icon: 'dashboard', route: 'dashboard' },
   { label: 'Referrals', icon: 'referrals', badge: '24', route: 'referrals' },
@@ -25,7 +28,17 @@ const navigation = [
 
 const navigate = (route) => {
   isSidebarOpen.value = false
+  showLogoutConfirm.value = false
   router.push({ name: route })
+}
+
+const confirmLogout = async () => {
+  await authStore.logout()
+  router.replace({ name: 'login' })
+}
+
+const promptLogout = () => {
+  showLogoutConfirm.value = true
 }
 </script>
 
@@ -52,11 +65,23 @@ const navigate = (route) => {
           <p class="truncate text-xs text-white/90">M. D. Reyes</p>
           <p class="text-[11px] text-white/50">PSB · Admin</p>
         </div><button class="ml-auto text-white/40 hover:text-white" type="button" aria-label="Log out"
-          @click="navigate('login')">
+          @click="promptLogout">
           <AppIcon name="logout" class="h-4 w-4" />
         </button>
       </div>
     </aside>
+
+    <div v-if="showLogoutConfirm" class="confirm-overlay" @click.self="showLogoutConfirm = false" role="dialog"
+      aria-modal="true" aria-labelledby="logout-confirm-title">
+      <div class="confirm-dialog">
+        <h2 id="logout-confirm-title" class="text-lg font-semibold text-gray-900">Confirm Log out</h2>
+        <p class="mt-2 text-sm text-gray-600">Are you sure you want to log out? Your current session will be closed.</p>
+        <div class="confirm-actions">
+          <button type="button" class="secondary-button" @click="showLogoutConfirm = false">Cancel</button>
+          <button type="button" class="primary-button" @click="confirmLogout">Log out</button>
+        </div>
+      </div>
+    </div>
     <div class="flex min-w-0 flex-1 flex-col">
       <header class="topbar">
         <div class="flex min-w-0 items-center gap-3"><button class="menu-button md:hidden" type="button"
@@ -236,5 +261,48 @@ const navigate = (route) => {
   .sidebar {
     transition: none
   }
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.55);
+  padding: 1rem;
+}
+
+.confirm-dialog {
+  width: min(100%, 380px);
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 30px 60px rgba(15, 23, 42, 0.15);
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.primary-button {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  border-radius: 999px;
+  background: red;
+  padding: .55rem 1rem;
+  color: white;
+  font-size: .875rem;
+  font-weight: 500;
+  transition: 200ms;
+}
+
+.confirm-dialog
+.confirm-dialog .secondary-button {
+  min-width: 100px;
 }
 </style>

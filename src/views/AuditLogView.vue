@@ -2,8 +2,10 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const isSidebarOpen = ref(false)
 const selectedLog = ref(null)
 const searchQuery = ref('')
@@ -44,6 +46,10 @@ const filteredLogs = computed(() => {
 })
 
 const navigate = (item) => { if (item.route) router.push({ name: item.route }) }
+const logout = async () => {
+  await authStore.logout()
+  router.replace({ name: 'login' })
+}
 const clearFilters = () => {
   searchQuery.value = ''
   actionFilter.value = 'All Actions'
@@ -89,7 +95,7 @@ const exportLogs = () => {
           <p class="truncate text-xs text-white/90">M. D. Reyes</p>
           <p class="text-[11px] text-white/50">PSB · Admin</p>
         </div><button class="ml-auto text-white/40 hover:text-white" type="button" aria-label="Log out"
-          @click="router.push({ name: 'login' })">
+          @click="logout">
           <AppIcon name="logout" class="h-4 w-4" />
         </button>
       </div>

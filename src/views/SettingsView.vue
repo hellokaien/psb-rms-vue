@@ -2,8 +2,10 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const isSidebarOpen = ref(false)
 const activeTab = ref('general')
 const feedback = ref('')
@@ -47,6 +49,10 @@ const getStoredSettings = () => {
 const settings = reactive({ ...defaults, ...getStoredSettings() })
 
 const navigate = (item) => { if (item.route) router.push({ name: item.route }) }
+const logout = async () => {
+  await authStore.logout()
+  router.replace({ name: 'login' })
+}
 const showFeedback = (message) => {
   feedback.value = message
   window.setTimeout(() => { feedback.value = '' }, 2500)
@@ -89,7 +95,7 @@ const demoDangerAction = (action) => {
           <p class="truncate text-xs text-white/90">M. D. Reyes</p>
           <p class="text-[11px] text-white/50">PSB · Admin</p>
         </div><button class="ml-auto text-white/40 hover:text-white" type="button" aria-label="Log out"
-          @click="router.push({ name: 'login' })">
+          @click="logout">
           <AppIcon name="logout" class="h-4 w-4" />
         </button>
       </div>

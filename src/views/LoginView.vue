@@ -1,13 +1,22 @@
 <script setup>
 import { ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
+import { apiBaseUrl } from '../lib/api'
 
+const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
 const isSigningIn = ref(false)
 const signInMessage = ref('')
 
+const redirectTarget = () => {
+  const redirect = route.query.redirect
+  return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/dashboard'
+}
+
 const handleGoogleSignIn = () => {
-  const googleAuthUrl =
-    import.meta.env.VITE_GOOGLE_AUTH_URL ||
-    `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/auth/google/redirect`
+  const googleAuthUrl = import.meta.env.VITE_GOOGLE_AUTH_URL || `${apiBaseUrl}/auth/google/redirect`
 
   if (!googleAuthUrl) {
     signInMessage.value =
@@ -19,6 +28,12 @@ const handleGoogleSignIn = () => {
   signInMessage.value = 'Redirecting to Google...'
   window.location.assign(googleAuthUrl)
 }
+
+authStore.fetchCurrentUser().then((user) => {
+  if (user) {
+    router.replace(redirectTarget())
+  }
+})
 </script>
 
 <template>

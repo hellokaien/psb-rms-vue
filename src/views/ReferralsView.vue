@@ -2,9 +2,11 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
+import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 const isSidebarOpen = ref(false)
 const isModalOpen = ref(false)
 const currentStep = ref(1)
@@ -63,6 +65,10 @@ const filteredReferrals = computed(() => {
 const statusClass = (status) => `status-${status.toLowerCase().replace(' ', '-')}`
 const navigate = (item) => {
   if (item.route) router.push({ name: item.route })
+}
+const logout = async () => {
+  await authStore.logout()
+  router.replace({ name: 'login' })
 }
 const openModal = () => {
   currentStep.value = 1
@@ -129,7 +135,7 @@ onMounted(() => {
           <p class="text-[11px] text-white/50">PSB · Admin</p>
         </div>
         <button class="ml-auto text-white/40 hover:text-white" type="button" aria-label="Log out"
-          @click="router.push({ name: 'login' })">
+          @click="logout">
           <AppIcon name="logout" class="h-4 w-4" />
         </button>
       </div>

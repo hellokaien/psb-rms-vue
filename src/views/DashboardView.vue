@@ -2,8 +2,10 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const isSidebarOpen = ref(false)
 const searchQuery = ref('')
 
@@ -52,7 +54,10 @@ const currentDate = new Intl.DateTimeFormat('en-PH', {
   month: 'long', day: 'numeric', year: 'numeric',
 }).format(new Date())
 
-const logout = () => router.push({ name: 'login' })
+const logout = async () => {
+  await authStore.logout()
+  router.replace({ name: 'login' })
+}
 const openNavigation = (item) => {
   if (item.route) router.push({ name: item.route })
 }

@@ -2,9 +2,11 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
+import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 const isSidebarOpen = ref(false)
 const isModalOpen = ref(false)
 const editingId = ref(null)
@@ -54,6 +56,10 @@ const filteredUsers = computed(() => {
 
 const initials = (user) => `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
 const navigate = (item) => { if (item.route) router.push({ name: item.route }) }
+const logout = async () => {
+  await authStore.logout()
+  router.replace({ name: 'login' })
+}
 const openAddModal = () => {
   editingId.value = null
   Object.assign(form, emptyForm())
@@ -100,7 +106,7 @@ onMounted(() => { if (route.query.create === '1') openAddModal() })
       <nav class="scrollable flex-1 space-y-1.5 overflow-y-auto px-3 py-5" aria-label="Main navigation">
         <button v-for="item in navigation" :key="item.label" type="button" class="nav-item" :class="{ active: item.route === 'users' }" @click="navigate(item)"><AppIcon :name="item.icon" class="h-5 w-5 shrink-0" /><span>{{ item.label }}</span><span v-if="item.badge" class="badge">{{ item.badge }}</span></button>
       </nav>
-      <div class="profile"><div class="avatar">MR</div><div class="min-w-0"><p class="truncate text-xs text-white/90">M. D. Reyes</p><p class="text-[11px] text-white/50">PSB · Admin</p></div><button class="ml-auto text-white/40 hover:text-white" type="button" aria-label="Log out" @click="router.push({ name: 'login' })"><AppIcon name="logout" class="h-4 w-4" /></button></div>
+      <div class="profile"><div class="avatar">MR</div><div class="min-w-0"><p class="truncate text-xs text-white/90">M. D. Reyes</p><p class="text-[11px] text-white/50">PSB · Admin</p></div><button class="ml-auto text-white/40 hover:text-white" type="button" aria-label="Log out" @click="logout"><AppIcon name="logout" class="h-4 w-4" /></button></div>
     </aside>
 
     <div class="flex min-w-0 flex-1 flex-col">
