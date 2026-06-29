@@ -1,27 +1,13 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
-
-// TEMPORARY: Change this to false when the real Google OAuth flow is ready.
-const TEMPORARY_AUTH_BYPASS = true
 
 const isSigningIn = ref(false)
 const signInMessage = ref('')
 
 const handleGoogleSignIn = () => {
-  if (TEMPORARY_AUTH_BYPASS) {
-    isSigningIn.value = true
-    signInMessage.value = 'Development bypass enabled. Opening dashboard...'
-
-    window.setTimeout(() => {
-      router.push({ name: 'dashboard' })
-    }, 350)
-    return
-  }
-
-  const googleAuthUrl = import.meta.env.VITE_GOOGLE_AUTH_URL
+  const googleAuthUrl =
+    import.meta.env.VITE_GOOGLE_AUTH_URL ||
+    `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/auth/google/redirect`
 
   if (!googleAuthUrl) {
     signInMessage.value =
@@ -30,7 +16,7 @@ const handleGoogleSignIn = () => {
   }
 
   isSigningIn.value = true
-  signInMessage.value = 'Redirecting to Google…'
+  signInMessage.value = 'Redirecting to Google...'
   window.location.assign(googleAuthUrl)
 }
 </script>
@@ -78,7 +64,7 @@ const handleGoogleSignIn = () => {
                   d="M12 6.01c1.47 0 2.79.5 3.83 1.5l2.87-2.87A9.63 9.63 0 0 0 12 2a10 10 0 0 0-8.96 5.52l3.35 2.62C7.18 7.77 9.39 6.01 12 6.01Z" />
               </svg>
 
-              <span>{{ isSigningIn ? 'Redirecting…' : 'Sign in with Google' }}</span>
+              <span>{{ isSigningIn ? 'Redirecting...' : 'Sign in with Google' }}</span>
 
               <svg class="ml-auto h-4 w-4 text-gray-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fill-rule="evenodd"
