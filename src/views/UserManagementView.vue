@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppSidebar from '../components/AppSidebar.vue'
 import AppIcon from '../components/AppIcon.vue'
+import { request } from '../lib/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,35 +14,128 @@ const searchQuery = ref('')
 const roleFilter = ref('All Roles')
 const statusFilter = ref('All Status')
 const formError = ref('')
+const pageError = ref('')
+const loading = ref(false)
+const saving = ref(false)
+const actionUserId = ref(null)
 
-const users = ref([
-  { id: 1, firstName: 'M. D.', lastName: 'Reyes', email: 'm.reyes@dswd.gov.ph', role: 'Admin', department: 'PSB Admin', status: 'Active', color: '#003366' },
-  { id: 2, firstName: 'J.', lastName: 'Santos', email: 'j.santos@dswd.gov.ph', role: 'Social Worker', department: 'Child Welfare', status: 'Active', color: '#c9a83e' },
-  { id: 3, firstName: 'L.', lastName: 'Garcia', email: 'l.garcia@dswd.gov.ph', role: 'Case Worker', department: 'Family Support', status: 'Active', color: '#7c3aed' },
-  { id: 4, firstName: 'M.', lastName: 'Rivera', email: 'm.rivera@dswd.gov.ph', role: 'Viewer', department: 'Records', status: 'Inactive', color: '#0891b2' },
-  { id: 5, firstName: 'A.', lastName: 'Aguilar', email: 'a.aguilar@dswd.gov.ph', role: 'Social Worker', department: 'Senior Citizen', status: 'Pending', color: '#059669' },
-  { id: 6, firstName: 'C.', lastName: 'Perez', email: 'c.perez@dswd.gov.ph', role: 'Case Worker', department: 'Disability', status: 'Active', color: '#b45309' },
-])
+const roleOptions = [
+  { value: 1, label: 'Super Admin' },
+  { value: 2, label: 'Admin' },
+  { value: 3, label: 'User' },
+  { value: 4, label: 'Viewer' },
+]
+const statusOptions = [
+  { value: 'approved_active', label: 'Active' },
+  { value: 'approved_inactive', label: 'Inactive' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'declined', label: 'Declined' },
+]
+const avatarColors = ['#003366', '#c9a83e', '#7c3aed', '#0891b2', '#059669', '#b45309']
+const users = ref([])
 
-const emptyForm = () => ({ firstName: '', lastName: '', email: '', role: '', department: '', status: '', password: '' })
+const emptyForm = () => ({
+  first_name: '',
+  middle_name: '',
+  last_name: '',
+  extension_name: '',
+  email: '',
+  role: 3,
+  position: '',
+  region: '',
+  status: 'pending',
+})
 const form = reactive(emptyForm())
 
 const stats = computed(() => [
   { label: 'Total Users', value: users.value.length, icon: 'users', tone: 'blue' },
   { label: 'Active', value: users.value.filter((user) => user.status === 'Active').length, icon: 'check', tone: 'green' },
   { label: 'Inactive', value: users.value.filter((user) => user.status === 'Inactive').length, icon: 'clock', tone: 'gray' },
-  { label: 'Pending Invites', value: users.value.filter((user) => user.status === 'Pending').length, icon: 'clock', tone: 'gold' },
+  { label: 'Pending Approval', value: users.value.filter((user) => user.status === 'Pending').length, icon: 'clock', tone: 'gold' },
 ])
 
 const filteredUsers = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
   return users.value.filter((user) => {
-    const matchesSearch = !query || [`${user.firstName} ${user.lastName}`, user.email, user.role].some((value) => value.toLowerCase().includes(query))
+    const matchesSearch = !query || [user.name, user.email, user.roleLabel, user.position, user.region].some((value) => String(value || '').toLowerCase().includes(query))
     return matchesSearch && (roleFilter.value === 'All Roles' || user.role === roleFilter.value) && (statusFilter.value === 'All Status' || user.status === statusFilter.value)
   })
 })
 
-const initials = (user) => `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
+const roleLabel = (role) => roleOptions.find((option) => option.value === Number(role))?.label || 'User'
+const statusFromUser = (user) => {
+  if (user.approval_status === 'declined') return 'Declined'
+  if (user.approval_status === 'pending') return 'Pending'
+  return user.is_active ? 'Active' : 'Inactive'
+}
+const formStatusFromUser = (user) => {
+  if (user.approval_status === 'declined') return 'declined'
+  if (user.approval_status === 'pending') return 'pending'
+  return user.is_active ? 'approved_active' : 'approved_inactive'
+}
+const payloadFromForm = () => {
+  const isApproved = form.status.startsWith('approved')
+
+  return {
+    first_name: form.first_name,
+    middle_name: form.middle_name || null,
+    last_name: form.last_name,
+    extension_name: form.extension_name || null,
+    email: form.email,
+    role: Number(form.role),
+    position: form.position || null,
+    region: form.region || null,
+    approval_status: isApproved ? 'approved' : form.status,
+    is_active: form.status === 'approved_active',
+  }
+}
+const normalizeUser = (user, index = 0) => ({
+  ...user,
+  name: user.name || [user.first_name, user.middle_name, user.last_name, user.extension_name].filter(Boolean).join(' '),
+  role: roleLabel(user.role),
+  roleValue: Number(user.role || 3),
+  roleLabel: user.role_label || roleLabel(user.role),
+  status: statusFromUser(user),
+  color: avatarColors[index % avatarColors.length],
+})
+const replaceUser = (user) => {
+  const index = users.value.findIndex((item) => item.id === user.id)
+  const normalized = normalizeUser(user, Math.max(index, 0))
+
+  if (index >= 0) {
+    users.value[index] = normalized
+  } else {
+    users.value.unshift(normalized)
+  }
+}
+const initials = (user) => {
+  const parts = (user.name || user.email || '').split(/\s+/).filter(Boolean)
+  return (parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : (parts[0] || '?').slice(0, 2)).toUpperCase()
+}
+
+async function loadUsers() {
+  loading.value = true
+  pageError.value = ''
+
+  try {
+    const response = await request('/auth/users')
+    const payload = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      pageError.value = payload.message || 'Unable to load users.'
+      users.value = []
+      return
+    }
+
+    users.value = (payload.users || []).map(normalizeUser)
+  } catch {
+    pageError.value = 'Unable to load users right now.'
+    users.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
 const openAddModal = () => {
   editingId.value = null
   Object.assign(form, emptyForm())
@@ -50,7 +144,17 @@ const openAddModal = () => {
 }
 const openEditModal = (user) => {
   editingId.value = user.id
-  Object.assign(form, { ...user, password: '' })
+  Object.assign(form, {
+    first_name: user.first_name || '',
+    middle_name: user.middle_name || '',
+    last_name: user.last_name || '',
+    extension_name: user.extension_name || '',
+    email: user.email || '',
+    role: user.roleValue || 3,
+    position: user.position || '',
+    region: user.region || '',
+    status: formStatusFromUser(user),
+  })
   formError.value = ''
   isModalOpen.value = true
 }
@@ -58,26 +162,119 @@ const closeModal = () => {
   isModalOpen.value = false
   router.replace({ query: {} })
 }
-const saveUser = () => {
-  const required = ['firstName', 'lastName', 'email', 'role', 'status']
-  if (required.some((field) => !form[field].trim()) || (!editingId.value && form.password.length < 8)) {
-    formError.value = editingId.value ? 'Please complete all required fields.' : 'Complete all required fields and use a password of at least 8 characters.'
+const saveUser = async () => {
+  const required = ['first_name', 'last_name', 'email', 'status']
+  if (required.some((field) => !String(form[field]).trim()) || !form.role) {
+    formError.value = 'Please complete all required fields.'
     return
   }
-  const userData = { firstName: form.firstName, lastName: form.lastName, email: form.email, role: form.role, department: form.department, status: form.status }
-  if (editingId.value) {
-    const index = users.value.findIndex((user) => user.id === editingId.value)
-    users.value[index] = { ...users.value[index], ...userData }
-  } else {
-    users.value.push({ id: Date.now(), ...userData, color: '#003366' })
+
+  saving.value = true
+  formError.value = ''
+
+  try {
+    const response = await request(editingId.value ? `/auth/users/${editingId.value}` : '/auth/users', {
+      method: editingId.value ? 'PATCH' : 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payloadFromForm()),
+    })
+    const payload = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      formError.value = payload.message || 'Unable to save this user.'
+      return
+    }
+
+    replaceUser(payload.user)
+    closeModal()
+  } catch {
+    formError.value = 'Unable to save this user right now.'
+  } finally {
+    saving.value = false
   }
-  closeModal()
-}
-const removeUser = (user) => {
-  if (window.confirm(`Remove ${user.firstName} ${user.lastName}?`)) users.value = users.value.filter((item) => item.id !== user.id)
 }
 
-onMounted(() => { if (route.query.create === '1') openAddModal() })
+const approveUser = async (user) => {
+  actionUserId.value = user.id
+  pageError.value = ''
+
+  try {
+    const response = await request(`/auth/users/${user.id}/approve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ role: user.roleValue || 3 }),
+    })
+    const payload = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      pageError.value = payload.message || 'Unable to approve user.'
+      return
+    }
+
+    replaceUser(payload.user)
+  } catch {
+    pageError.value = 'Unable to approve user right now.'
+  } finally {
+    actionUserId.value = null
+  }
+}
+
+const declineUser = async (user) => {
+  actionUserId.value = user.id
+  pageError.value = ''
+
+  try {
+    const response = await request(`/auth/users/${user.id}/decline`, {
+      method: 'POST',
+    })
+    const payload = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      pageError.value = payload.message || 'Unable to decline user.'
+      return
+    }
+
+    replaceUser(payload.user)
+  } catch {
+    pageError.value = 'Unable to decline user right now.'
+  } finally {
+    actionUserId.value = null
+  }
+}
+
+const removeUser = async (user) => {
+  if (!window.confirm(`Remove ${user.name}?`)) return
+
+  actionUserId.value = user.id
+  pageError.value = ''
+
+  try {
+    const response = await request(`/auth/users/${user.id}`, {
+      method: 'DELETE',
+    })
+    const payload = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      pageError.value = payload.message || 'Unable to remove user.'
+      return
+    }
+
+    users.value = users.value.filter((item) => item.id !== user.id)
+  } catch {
+    pageError.value = 'Unable to remove user right now.'
+  } finally {
+    actionUserId.value = null
+  }
+}
+
+onMounted(async () => {
+  await loadUsers()
+  if (route.query.create === '1') openAddModal()
+})
 </script>
 
 <template>
@@ -100,6 +297,8 @@ onMounted(() => { if (route.query.create === '1') openAddModal() })
       </header>
 
       <main class="scrollable flex-1 overflow-y-auto bg-[#f0f4f8] p-4 sm:p-5 lg:p-6">
+        <p v-if="pageError" class="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">{{ pageError }}</p>
+
         <section class="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="User statistics">
           <article v-for="stat in stats" :key="stat.label" class="stat-card">
             <div class="flex items-center justify-between"><span class="text-xs font-medium text-gray-400 sm:text-sm">{{
@@ -117,15 +316,10 @@ onMounted(() => { if (route.query.create === '1') openAddModal() })
           </label>
           <div class="flex flex-wrap gap-2"><select v-model="roleFilter" class="control">
               <option>All Roles</option>
-              <option>Admin</option>
-              <option>Social Worker</option>
-              <option>Case Worker</option>
-              <option>Viewer</option>
+              <option v-for="role in roleOptions" :key="role.value">{{ role.label }}</option>
             </select><select v-model="statusFilter" class="control">
               <option>All Status</option>
-              <option>Active</option>
-              <option>Inactive</option>
-              <option>Pending</option>
+              <option v-for="status in statusOptions" :key="status.value">{{ status.label }}</option>
             </select></div>
         </section>
 
@@ -143,23 +337,32 @@ onMounted(() => { if (route.query.create === '1') openAddModal() })
                 </tr>
               </thead>
               <tbody>
+                <tr v-if="loading">
+                  <td colspan="6" class="py-10 text-center text-gray-400">Loading users...</td>
+                </tr>
                 <tr v-for="user in filteredUsers" :key="user.id">
                   <td>
                     <div class="flex items-center gap-3"><span class="user-avatar"
                         :style="{ background: user.color }">{{ initials(user) }}</span><span
-                        class="font-medium text-gray-700">{{ user.firstName }} {{ user.lastName }}</span></div>
+                        class="font-medium text-gray-700">{{ user.name }}</span></div>
                   </td>
                   <td class="text-gray-500">{{ user.email }}</td>
-                  <td><span class="role-pill">{{ user.role }}</span></td>
-                  <td class="text-gray-500">{{ user.department || '—' }}</td>
+                  <td><span class="role-pill">{{ user.roleLabel }}</span></td>
+                  <td class="text-gray-500">{{ user.position || user.region || '—' }}</td>
                   <td><span class="status-pill" :class="`status-${user.status.toLowerCase()}`">{{ user.status }}</span>
                   </td>
-                  <td class="text-right"><button class="mr-3 font-medium text-blue-600 hover:text-blue-800"
-                      type="button" @click="openEditModal(user)">Edit</button><button
-                      class="text-gray-400 hover:text-red-600" type="button" @click="removeUser(user)">Remove</button>
+                  <td class="text-right">
+                    <button v-if="user.status !== 'Active'" class="mr-3 font-medium text-green-600 hover:text-green-800"
+                      type="button" :disabled="actionUserId === user.id" @click="approveUser(user)">Approve</button><button
+                      v-if="user.status === 'Pending'" class="mr-3 font-medium text-amber-600 hover:text-amber-800"
+                      type="button" :disabled="actionUserId === user.id" @click="declineUser(user)">Decline</button><button
+                      class="mr-3 font-medium text-blue-600 hover:text-blue-800" type="button"
+                      :disabled="actionUserId === user.id" @click="openEditModal(user)">Edit</button><button
+                      class="text-gray-400 hover:text-red-600" type="button" :disabled="actionUserId === user.id"
+                      @click="removeUser(user)">Remove</button>
                   </td>
                 </tr>
-                <tr v-if="!filteredUsers.length">
+                <tr v-if="!loading && !filteredUsers.length">
                   <td colspan="6" class="py-10 text-center text-gray-400">No users found.</td>
                 </tr>
               </tbody>
@@ -183,41 +386,30 @@ onMounted(() => { if (route.query.create === '1') openAddModal() })
           </div><button type="button" class="text-2xl text-gray-400" aria-label="Close" @click="closeModal">Ã—</button>
         </div>
         <form @submit.prevent="saveUser">
-          <div class="form-grid"><label>First Name *<input v-model="form.firstName" type="text"></label><label>Last Name
-              *<input v-model="form.lastName" type="text"></label><label class="sm:col-span-2">Email Address *<input
+          <div class="form-grid"><label>First Name *<input v-model="form.first_name" type="text"></label><label>Middle Name<input
+                v-model="form.middle_name" type="text"></label><label>Last Name *<input v-model="form.last_name"
+                type="text"></label><label>Extension Name<input v-model="form.extension_name" type="text"
+                placeholder="Jr., Sr., III"></label><label class="sm:col-span-2">Email Address *<input
                 v-model="form.email" type="email" placeholder="user@dswd.gov.ph"></label><label>Role *<select
                 v-model="form.role">
                 <option value="" disabled>Select role</option>
-                <option>Admin</option>
-                <option>Social Worker</option>
-                <option>Case Worker</option>
-                <option>Viewer</option>
-              </select></label><label>Department<select v-model="form.department">
-                <option value="">Select department</option>
-                <option>PSB Admin</option>
-                <option>Child Welfare</option>
-                <option>Senior Citizen</option>
-                <option>Disability</option>
-                <option>Women's Welfare</option>
-                <option>Family Support</option>
-                <option>Records</option>
-              </select></label><label>Status *<select v-model="form.status">
+                <option v-for="role in roleOptions" :key="role.value" :value="role.value">{{ role.label }}</option>
+              </select></label><label>Position<input v-model="form.position" type="text"
+                placeholder="Administrative Officer"></label><label>Region<input v-model="form.region" type="text"
+                placeholder="NCR - National Capital Region"></label><label>Status *<select v-model="form.status">
                 <option value="" disabled>Select status</option>
-                <option>Active</option>
-                <option>Inactive</option>
-                <option>Pending</option>
-              </select></label><label v-if="!editingId">Password *<input v-model="form.password" type="password"
-                placeholder="Minimum 8 characters"></label></div>
+                <option v-for="status in statusOptions" :key="status.value" :value="status.value">{{ status.label }}</option>
+              </select></label></div>
           <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4 text-sm text-gray-600">
             <p class="font-medium text-[#003366]">Permission Summary</p>
-            <p class="mt-1 text-xs text-gray-500">Admins have full access, Social Workers manage cases, Case Workers
-              update assigned records, and Viewers have read-only access.</p>
+            <p class="mt-1 text-xs text-gray-500">Super admins and admins can manage users. Users can access approved
+              workflows, and viewers have read-only access.</p>
           </div>
           <p v-if="formError" class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">{{ formError
             }}</p>
           <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-4"><button type="button"
               class="secondary-button" @click="closeModal">Cancel</button><button type="submit"
-              class="primary-button">Save User</button></div>
+              class="primary-button" :disabled="saving">{{ saving ? 'Saving...' : 'Save User' }}</button></div>
         </form>
       </div>
     </div>
@@ -505,6 +697,11 @@ tbody tr:hover {
 .status-pending {
   background: #fef3c7;
   color: #b45309
+}
+
+.status-declined {
+  background: #fee2e2;
+  color: #b91c1c
 }
 
 .table-footer {

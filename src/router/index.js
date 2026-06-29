@@ -14,6 +14,12 @@ const router = createRouter({
       meta: { guestOnly: true },
     },
     {
+      path: '/signup',
+      name: 'signup',
+      component: () => import('../views/SignupView.vue'),
+      meta: { requiresAuth: true, allowPending: true },
+    },
+    {
       path: '/dashboard',
       name: 'dashboard',
       component: () => import('../views/DashboardView.vue'),
@@ -94,8 +100,20 @@ router.beforeEach(async (to) => {
     }
   }
 
-  if (to.meta.guestOnly && authStore.isAuthenticated) {
+  if (authStore.isAuthenticated && !authStore.canAccessApp && !to.meta.allowPending) {
+    return { name: 'signup' }
+  }
+
+  if (to.name === 'signup' && authStore.canAccessApp) {
     return { name: 'dashboard' }
+  }
+
+  if (to.meta.guestOnly && authStore.canAccessApp) {
+    return { name: 'dashboard' }
+  }
+
+  if (to.meta.guestOnly && authStore.isAuthenticated && !authStore.canAccessApp) {
+    return { name: 'signup' }
   }
 })
 

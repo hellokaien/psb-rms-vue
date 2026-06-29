@@ -16,11 +16,7 @@ function getCookie(name) {
   return decodeURIComponent(match.slice(name.length + 1))
 }
 
-async function ensureCsrfCookie() {
-  if (getCookie('XSRF-TOKEN')) {
-    return
-  }
-
+async function refreshCsrfCookie() {
   await fetch(`${apiBaseUrl}/auth/user`, {
     credentials: 'include',
     headers: {
@@ -29,28 +25,46 @@ async function ensureCsrfCookie() {
   })
 }
 
+function withXsrfHeader(headers) {
+  const xsrfToken = getCookie('XSRF-TOKEN')
+
+  if (xsrfToken) {
+    headers['X-XSRF-TOKEN'] = xsrfToken
+  }
+
+  return headers
+}
+
 export async function request(path, options = {}) {
   const method = (options.method || 'GET').toUpperCase()
+  const needsCsrf = !['GET', 'HEAD', 'OPTIONS'].includes(method)
   const headers = {
     Accept: 'application/json',
     ...options.headers,
   }
 
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
-    await ensureCsrfCookie()
-
-    const xsrfToken = getCookie('XSRF-TOKEN')
-    if (xsrfToken) {
-      headers['X-XSRF-TOKEN'] = xsrfToken
-    }
+  if (needsCsrf) {
+    await refreshCsrfCookie()
+    withXsrfHeader(headers)
   }
 
-  return fetch(`${apiBaseUrl}${path}`, {
+  const requestOptions = {
     credentials: 'include',
     ...options,
     method,
     headers,
-  })
+  }
+
+  const response = await fetch(`${apiBaseUrl}${path}`, requestOptions)
+
+  if (needsCsrf && response.status === 419) {
+    await refreshCsrfCookie()
+    withXsrfHeader(headers)
+
+    return fetch(`${apiBaseUrl}${path}`, requestOptions)
+  }
+
+  return response
 }
 
 export { apiBaseUrl }

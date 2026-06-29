@@ -8,6 +8,13 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(false)
 
   const isAuthenticated = computed(() => Boolean(user.value))
+  const isApproved = computed(() => user.value?.approval_status === 'approved')
+  const isActive = computed(() => Boolean(user.value?.is_active))
+  const hasCompletedRegistration = computed(() => Boolean(user.value?.registration_completed))
+  const canAccessApp = computed(() => isAuthenticated.value && isApproved.value && isActive.value)
+  const needsRegistration = computed(() => isAuthenticated.value && !hasCompletedRegistration.value)
+  const isPendingApproval = computed(() => isAuthenticated.value && user.value?.approval_status === 'pending')
+  const isDeclined = computed(() => isAuthenticated.value && user.value?.approval_status === 'declined')
 
   async function fetchCurrentUser(force = false) {
     if (loading.value || (initialized.value && !force)) {
@@ -59,6 +66,13 @@ export const useAuthStore = defineStore('auth', () => {
     initialized,
     loading,
     isAuthenticated,
+    isApproved,
+    isActive,
+    hasCompletedRegistration,
+    canAccessApp,
+    needsRegistration,
+    isPendingApproval,
+    isDeclined,
     fetchCurrentUser,
     logout,
     clearAuth,
