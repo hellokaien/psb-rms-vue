@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppSidebar from '../components/AppSidebar.vue'
 import AppIcon from '../components/AppIcon.vue'
@@ -10,6 +10,9 @@ const router = useRouter()
 const isSidebarOpen = ref(false)
 const isModalOpen = ref(false)
 const editingId = ref(null)
+const viewingUser = ref(null)
+const openActionId = ref(null)
+const actionMenuPosition = reactive({ top: 0, left: 0 })
 const searchQuery = ref('')
 const roleFilter = ref('All Roles')
 const statusFilter = ref('All Status')
@@ -61,6 +64,11 @@ const filteredUsers = computed(() => {
     return matchesSearch && (roleFilter.value === 'All Roles' || user.role === roleFilter.value) && (statusFilter.value === 'All Status' || user.status === statusFilter.value)
   })
 })
+const openActionUser = computed(() => users.value.find((user) => user.id === openActionId.value))
+const actionMenuStyle = computed(() => ({
+  top: `${actionMenuPosition.top}px`,
+  left: `${actionMenuPosition.left}px`,
+}))
 
 const roleLabel = (role) => roleOptions.find((option) => option.value === Number(role))?.label || 'User'
 const statusFromUser = (user) => {
@@ -112,6 +120,17 @@ const initials = (user) => {
   const parts = (user.name || user.email || '').split(/\s+/).filter(Boolean)
   return (parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : (parts[0] || '?').slice(0, 2)).toUpperCase()
 }
+const formatDate = (value) => {
+  if (!value) return '—'
+
+  return new Intl.DateTimeFormat('en-PH', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
 
 async function loadUsers() {
   loading.value = true
@@ -137,12 +156,14 @@ async function loadUsers() {
 }
 
 const openAddModal = () => {
+  openActionId.value = null
   editingId.value = null
   Object.assign(form, emptyForm())
   formError.value = ''
   isModalOpen.value = true
 }
 const openEditModal = (user) => {
+  openActionId.value = null
   editingId.value = user.id
   Object.assign(form, {
     first_name: user.first_name || '',
@@ -158,9 +179,44 @@ const openEditModal = (user) => {
   formError.value = ''
   isModalOpen.value = true
 }
+const openViewModal = (user) => {
+  openActionId.value = null
+  viewingUser.value = user
+}
 const closeModal = () => {
   isModalOpen.value = false
   router.replace({ query: {} })
+}
+const closeViewModal = () => {
+  viewingUser.value = null
+}
+const closeActionMenu = () => {
+  openActionId.value = null
+}
+const toggleActionMenu = (userId, event) => {
+  if (openActionId.value === userId) {
+    openActionId.value = null
+    return
+  }
+
+  const menuWidth = 168
+  const menuHeight = 210
+  const gap = 6
+  const rect = event.currentTarget.getBoundingClientRect()
+  const opensUp = rect.bottom + menuHeight + gap > window.innerHeight
+
+  actionMenuPosition.left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8))
+  actionMenuPosition.top = opensUp ? Math.max(8, rect.top - menuHeight - gap) : rect.bottom + gap
+  openActionId.value = userId
+}
+const handleDocumentPointerDown = (event) => {
+  if (!openActionId.value) return
+
+  if (event.target.closest('.action-menu, .action-menu-trigger')) {
+    return
+  }
+
+  closeActionMenu()
 }
 const saveUser = async () => {
   const required = ['first_name', 'last_name', 'email', 'status']
@@ -197,6 +253,7 @@ const saveUser = async () => {
 }
 
 const approveUser = async (user) => {
+  openActionId.value = null
   actionUserId.value = user.id
   pageError.value = ''
 
@@ -224,6 +281,7 @@ const approveUser = async (user) => {
 }
 
 const declineUser = async (user) => {
+  openActionId.value = null
   actionUserId.value = user.id
   pageError.value = ''
 
@@ -247,6 +305,7 @@ const declineUser = async (user) => {
 }
 
 const removeUser = async (user) => {
+  openActionId.value = null
   if (!window.confirm(`Remove ${user.name}?`)) return
 
   actionUserId.value = user.id
@@ -272,8 +331,13 @@ const removeUser = async (user) => {
 }
 
 onMounted(async () => {
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
   await loadUsers()
   if (route.query.create === '1') openAddModal()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
 })
 </script>
 
@@ -351,15 +415,14 @@ onMounted(async () => {
                   <td class="text-gray-500">{{ user.position || user.region || '—' }}</td>
                   <td><span class="status-pill" :class="`status-${user.status.toLowerCase()}`">{{ user.status }}</span>
                   </td>
-                  <td class="text-right">
-                    <button v-if="user.status !== 'Active'" class="mr-3 font-medium text-green-600 hover:text-green-800"
-                      type="button" :disabled="actionUserId === user.id" @click="approveUser(user)">Approve</button><button
-                      v-if="user.status === 'Pending'" class="mr-3 font-medium text-amber-600 hover:text-amber-800"
-                      type="button" :disabled="actionUserId === user.id" @click="declineUser(user)">Decline</button><button
-                      class="mr-3 font-medium text-blue-600 hover:text-blue-800" type="button"
-                      :disabled="actionUserId === user.id" @click="openEditModal(user)">Edit</button><button
-                      class="text-gray-400 hover:text-red-600" type="button" :disabled="actionUserId === user.id"
-                      @click="removeUser(user)">Remove</button>
+                  <td class="text-left">
+                    <div class="action-menu-wrap">
+                      <button class="action-menu-trigger" type="button" :aria-expanded="openActionId === user.id"
+                        aria-label="Open user actions" :disabled="actionUserId === user.id"
+                        @click="toggleActionMenu(user.id, $event)">
+                        <AppIcon name="moreVertical" class="h-5 w-5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
                 <tr v-if="!loading && !filteredUsers.length">
@@ -376,6 +439,61 @@ onMounted(async () => {
       </main>
     </div>
 
+    <Teleport to="body">
+      <div v-if="openActionUser" class="action-menu" :style="actionMenuStyle">
+        <button type="button" @click="openViewModal(openActionUser)">
+          <AppIcon name="eye" class="h-4 w-4" />View
+        </button>
+        <button v-if="openActionUser.status !== 'Active'" type="button" @click="approveUser(openActionUser)">
+          <AppIcon name="check" class="h-4 w-4" />Approve
+        </button>
+        <button v-if="openActionUser.status === 'Pending'" type="button" @click="declineUser(openActionUser)">
+          <AppIcon name="close" class="h-4 w-4" />Decline
+        </button>
+        <button type="button" @click="openEditModal(openActionUser)">
+          <AppIcon name="edit" class="h-4 w-4" />Edit
+        </button>
+        <button class="danger" type="button" @click="removeUser(openActionUser)">
+          <AppIcon name="close" class="h-4 w-4" />Remove
+        </button>
+      </div>
+    </Teleport>
+
+    <div v-if="viewingUser" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="user-view-title"
+      @click.self="closeViewModal">
+      <div class="modal">
+        <div class="mb-6 flex items-center justify-between">
+          <div class="flex min-w-0 items-center gap-3">
+            <span class="user-avatar view-avatar" :style="{ background: viewingUser.color }">{{ initials(viewingUser) }}</span>
+            <div class="min-w-0">
+              <h2 id="user-view-title" class="truncate text-xl font-semibold text-gray-800">{{ viewingUser.name }}</h2>
+              <p class="mt-1 truncate text-xs text-gray-400">{{ viewingUser.email }}</p>
+            </div>
+          </div><button type="button" class="text-2xl text-gray-400" aria-label="Close" @click="closeViewModal">&times;</button>
+        </div>
+
+        <div class="view-grid">
+          <div><span>First Name</span><strong>{{ viewingUser.first_name || '—' }}</strong></div>
+          <div><span>Middle Name</span><strong>{{ viewingUser.middle_name || '—' }}</strong></div>
+          <div><span>Last Name</span><strong>{{ viewingUser.last_name || '—' }}</strong></div>
+          <div><span>Extension Name</span><strong>{{ viewingUser.extension_name || '—' }}</strong></div>
+          <div><span>Role</span><strong>{{ viewingUser.roleLabel }}</strong></div>
+          <div><span>Status</span><strong>{{ viewingUser.status }}</strong></div>
+          <div><span>Position</span><strong>{{ viewingUser.position || '—' }}</strong></div>
+          <div><span>Region</span><strong>{{ viewingUser.region || '—' }}</strong></div>
+          <div><span>Registration</span><strong>{{ viewingUser.registration_completed ? 'Completed' : 'Incomplete' }}</strong></div>
+          <div><span>Created</span><strong>{{ formatDate(viewingUser.created_at) }}</strong></div>
+          <div><span>Approved</span><strong>{{ formatDate(viewingUser.approved_at) }}</strong></div>
+          <div><span>Declined</span><strong>{{ formatDate(viewingUser.declined_at) }}</strong></div>
+        </div>
+
+        <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-4">
+          <button type="button" class="secondary-button" @click="closeViewModal">Close</button>
+          <button type="button" class="primary-button" @click="openEditModal(viewingUser); closeViewModal()">Edit User</button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="isModalOpen" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="user-modal-title"
       @click.self="closeModal">
       <div class="modal">
@@ -383,7 +501,7 @@ onMounted(async () => {
           <div>
             <h2 id="user-modal-title" class="text-xl font-semibold text-gray-800">{{ editingId ? 'Edit User' : 'Add New User' }}</h2>
             <p class="mt-1 text-xs text-gray-400">Assign account details, role, and access status.</p>
-          </div><button type="button" class="text-2xl text-gray-400" aria-label="Close" @click="closeModal">Ã—</button>
+          </div><button type="button" class="text-2xl text-gray-400" aria-label="Close" @click="closeModal">&times;</button>
         </div>
         <form @submit.prevent="saveUser">
           <div class="form-grid"><label>First Name *<input v-model="form.first_name" type="text"></label><label>Middle Name<input
@@ -555,6 +673,11 @@ onMounted(async () => {
   background: #b8942e
 }
 
+.primary-button:disabled {
+  cursor: wait;
+  opacity: .7
+}
+
 .stat-card {
   border: 1px solid rgb(255 255 255/60%);
   border-radius: 1rem;
@@ -629,7 +752,7 @@ onMounted(async () => {
 }
 
 .table-card {
-  overflow: hidden;
+  overflow: visible;
   border-radius: 1rem;
   background: white;
   box-shadow: 0 2px 8px rgb(0 0 0/4%)
@@ -656,6 +779,71 @@ tbody tr {
 
 tbody tr:hover {
   background: #f8fafc
+}
+
+.action-menu-wrap {
+  position: relative;
+  display: inline-flex;
+  justify-content: flex-end
+}
+
+.action-menu-trigger {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: .65rem;
+  color: #64748b
+}
+
+.action-menu-trigger:hover,
+.action-menu-trigger[aria-expanded="true"] {
+  background: #f8fafc;
+  color: #003366
+}
+
+.action-menu-trigger:disabled {
+  cursor: wait;
+  opacity: .65
+}
+
+.action-menu {
+  position: fixed;
+  z-index: 120;
+  width: 10.5rem;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: .75rem;
+  background: white;
+  padding: .25rem;
+  text-align: left;
+  box-shadow: 0 18px 35px -18px rgb(15 23 42 / 45%)
+}
+
+.action-menu button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: .5rem;
+  border-radius: .55rem;
+  padding: .55rem .65rem;
+  color: #475569;
+  font-size: .8rem;
+  font-weight: 500
+}
+
+.action-menu button:hover {
+  background: #f8fafc;
+  color: #003366
+}
+
+.action-menu button.danger {
+  color: #b91c1c
+}
+
+.action-menu button.danger:hover {
+  background: #fef2f2
 }
 
 .user-avatar {
@@ -747,6 +935,40 @@ tbody tr:hover {
   box-shadow: 0 25px 50px -12px rgb(0 0 0/25%)
 }
 
+.view-avatar {
+  width: 2.75rem;
+  height: 2.75rem
+}
+
+.view-grid {
+  display: grid;
+  gap: .75rem
+}
+
+.view-grid div {
+  display: grid;
+  gap: .25rem;
+  border: 1px solid #eef2f7;
+  border-radius: .75rem;
+  background: #f8fafc;
+  padding: .75rem
+}
+
+.view-grid span {
+  color: #94a3b8;
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase
+}
+
+.view-grid strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #334155;
+  font-size: .875rem;
+  font-weight: 600
+}
+
 .form-grid {
   display: grid;
   gap: 1rem
@@ -796,6 +1018,10 @@ tbody tr:hover {
   }
 
   .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr))
+  }
+
+  .view-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr))
   }
 }
