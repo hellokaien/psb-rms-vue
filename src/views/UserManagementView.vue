@@ -1,12 +1,11 @@
-<script setup>
+﻿<script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import AppSidebar from '../components/AppSidebar.vue'
 import AppIcon from '../components/AppIcon.vue'
-import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
 const isSidebarOpen = ref(false)
 const isModalOpen = ref(false)
 const editingId = ref(null)
@@ -14,18 +13,6 @@ const searchQuery = ref('')
 const roleFilter = ref('All Roles')
 const statusFilter = ref('All Status')
 const formError = ref('')
-
-const navigation = [
-  { label: 'Dashboard', icon: 'dashboard', route: 'dashboard' },
-  { label: 'Referrals', icon: 'referrals', badge: '24', route: 'referrals' },
-  { label: 'Referrals for Action', icon: 'clock', badge: '7', route: 'actions' },
-  { label: 'User Management', icon: 'users', route: 'users' },
-  { label: 'Settings', icon: 'settings', route: 'settings' },
-  { label: 'Reference Data', icon: 'database', route: 'reference' },
-  { label: 'Reports', icon: 'reports', route: 'reports' },
-  { label: 'Archive', icon: 'archive', route: 'archive' },
-  { label: 'Audit Log', icon: 'audit', route: 'audit' },
-]
 
 const users = ref([
   { id: 1, firstName: 'M. D.', lastName: 'Reyes', email: 'm.reyes@dswd.gov.ph', role: 'Admin', department: 'PSB Admin', status: 'Active', color: '#003366' },
@@ -55,11 +42,6 @@ const filteredUsers = computed(() => {
 })
 
 const initials = (user) => `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
-const navigate = (item) => { if (item.route) router.push({ name: item.route }) }
-const logout = async () => {
-  await authStore.logout()
-  router.replace({ name: 'login' })
-}
 const openAddModal = () => {
   editingId.value = null
   Object.assign(form, emptyForm())
@@ -100,49 +82,142 @@ onMounted(() => { if (route.query.create === '1') openAddModal() })
 
 <template>
   <div class="page-shell">
-    <div v-if="isSidebarOpen" class="fixed inset-0 z-30 bg-slate-950/45 md:hidden" @click="isSidebarOpen = false"></div>
-    <aside class="sidebar" :class="{ open: isSidebarOpen }">
-      <div class="brand"><div class="logo"><img src="/dswdlogo_notext.png" alt="DSWD Logo"></div><span>PSB · RMS</span><button class="ml-auto md:hidden" type="button" aria-label="Close menu" @click="isSidebarOpen = false"><AppIcon name="close" class="h-5 w-5" /></button></div>
-      <nav class="scrollable flex-1 space-y-1.5 overflow-y-auto px-3 py-5" aria-label="Main navigation">
-        <button v-for="item in navigation" :key="item.label" type="button" class="nav-item" :class="{ active: item.route === 'users' }" @click="navigate(item)"><AppIcon :name="item.icon" class="h-5 w-5 shrink-0" /><span>{{ item.label }}</span><span v-if="item.badge" class="badge">{{ item.badge }}</span></button>
-      </nav>
-      <div class="profile"><div class="avatar">MR</div><div class="min-w-0"><p class="truncate text-xs text-white/90">M. D. Reyes</p><p class="text-[11px] text-white/50">PSB · Admin</p></div><button class="ml-auto text-white/40 hover:text-white" type="button" aria-label="Log out" @click="logout"><AppIcon name="logout" class="h-4 w-4" /></button></div>
-    </aside>
-
+    <AppSidebar v-model:open="isSidebarOpen" active-route="users" />
     <div class="flex min-w-0 flex-1 flex-col">
       <header class="topbar">
-        <div class="flex min-w-0 items-center gap-3"><button class="menu-button md:hidden" type="button" aria-label="Open menu" @click="isSidebarOpen = true"><AppIcon name="menu" class="h-5 w-5" /></button><div><h1 class="text-xl font-semibold tracking-tight text-gray-800">User Management</h1><p class="text-sm text-gray-400">Manage system users, roles, and permissions</p></div></div>
-        <button class="primary-button" type="button" @click="openAddModal"><AppIcon name="plus" class="h-4 w-4" /><span class="hidden sm:inline">Add User</span></button>
+        <div class="flex min-w-0 items-center gap-3"><button class="menu-button md:hidden" type="button"
+            aria-label="Open menu" @click="isSidebarOpen = true">
+            <AppIcon name="menu" class="h-5 w-5" />
+          </button>
+          <div>
+            <h1 class="text-xl font-semibold tracking-tight text-gray-800">User Management</h1>
+            <p class="text-sm text-gray-400">Manage system users, roles, and permissions</p>
+          </div>
+        </div>
+        <button class="primary-button" type="button" @click="openAddModal">
+          <AppIcon name="plus" class="h-4 w-4" /><span class="hidden sm:inline">Add User</span>
+        </button>
       </header>
 
       <main class="scrollable flex-1 overflow-y-auto bg-[#f0f4f8] p-4 sm:p-5 lg:p-6">
         <section class="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="User statistics">
-          <article v-for="stat in stats" :key="stat.label" class="stat-card"><div class="flex items-center justify-between"><span class="text-xs font-medium text-gray-400 sm:text-sm">{{ stat.label }}</span><span class="stat-icon" :class="`tone-${stat.tone}`"><AppIcon :name="stat.icon" class="h-5 w-5" /></span></div><p class="mt-1 text-2xl font-semibold text-gray-800">{{ stat.value }}</p></article>
+          <article v-for="stat in stats" :key="stat.label" class="stat-card">
+            <div class="flex items-center justify-between"><span class="text-xs font-medium text-gray-400 sm:text-sm">{{
+                stat.label }}</span><span class="stat-icon" :class="`tone-${stat.tone}`">
+                <AppIcon :name="stat.icon" class="h-5 w-5" />
+              </span></div>
+            <p class="mt-1 text-2xl font-semibold text-gray-800">{{ stat.value }}</p>
+          </article>
         </section>
 
         <section class="filter-card" aria-label="User filters">
-          <label class="search-input"><AppIcon name="search" class="h-4 w-4 text-gray-400" /><input v-model="searchQuery" type="search" placeholder="Search by name, email, or role..."></label>
-          <div class="flex flex-wrap gap-2"><select v-model="roleFilter" class="control"><option>All Roles</option><option>Admin</option><option>Social Worker</option><option>Case Worker</option><option>Viewer</option></select><select v-model="statusFilter" class="control"><option>All Status</option><option>Active</option><option>Inactive</option><option>Pending</option></select></div>
+          <label class="search-input">
+            <AppIcon name="search" class="h-4 w-4 text-gray-400" /><input v-model="searchQuery" type="search"
+              placeholder="Search by name, email, or role...">
+          </label>
+          <div class="flex flex-wrap gap-2"><select v-model="roleFilter" class="control">
+              <option>All Roles</option>
+              <option>Admin</option>
+              <option>Social Worker</option>
+              <option>Case Worker</option>
+              <option>Viewer</option>
+            </select><select v-model="statusFilter" class="control">
+              <option>All Status</option>
+              <option>Active</option>
+              <option>Inactive</option>
+              <option>Pending</option>
+            </select></div>
         </section>
 
         <section class="table-card">
-          <div class="overflow-x-auto"><table class="w-full min-w-[720px]"><thead><tr><th>User</th><th>Email</th><th>Role</th><th>Department</th><th>Status</th><th class="text-right">Actions</th></tr></thead><tbody>
-            <tr v-for="user in filteredUsers" :key="user.id"><td><div class="flex items-center gap-3"><span class="user-avatar" :style="{ background: user.color }">{{ initials(user) }}</span><span class="font-medium text-gray-700">{{ user.firstName }} {{ user.lastName }}</span></div></td><td class="text-gray-500">{{ user.email }}</td><td><span class="role-pill">{{ user.role }}</span></td><td class="text-gray-500">{{ user.department || '—' }}</td><td><span class="status-pill" :class="`status-${user.status.toLowerCase()}`">{{ user.status }}</span></td><td class="text-right"><button class="mr-3 font-medium text-blue-600 hover:text-blue-800" type="button" @click="openEditModal(user)">Edit</button><button class="text-gray-400 hover:text-red-600" type="button" @click="removeUser(user)">Remove</button></td></tr>
-            <tr v-if="!filteredUsers.length"><td colspan="6" class="py-10 text-center text-gray-400">No users found.</td></tr>
-          </tbody></table></div>
-          <div class="table-footer"><span>Showing {{ filteredUsers.length }} of {{ users.length }} users</span><div class="flex gap-1"><button disabled>Previous</button><button class="current">1</button><button disabled>Next</button></div></div>
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[720px]">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Department</th>
+                  <th>Status</th>
+                  <th class="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="user in filteredUsers" :key="user.id">
+                  <td>
+                    <div class="flex items-center gap-3"><span class="user-avatar"
+                        :style="{ background: user.color }">{{ initials(user) }}</span><span
+                        class="font-medium text-gray-700">{{ user.firstName }} {{ user.lastName }}</span></div>
+                  </td>
+                  <td class="text-gray-500">{{ user.email }}</td>
+                  <td><span class="role-pill">{{ user.role }}</span></td>
+                  <td class="text-gray-500">{{ user.department || '—' }}</td>
+                  <td><span class="status-pill" :class="`status-${user.status.toLowerCase()}`">{{ user.status }}</span>
+                  </td>
+                  <td class="text-right"><button class="mr-3 font-medium text-blue-600 hover:text-blue-800"
+                      type="button" @click="openEditModal(user)">Edit</button><button
+                      class="text-gray-400 hover:text-red-600" type="button" @click="removeUser(user)">Remove</button>
+                  </td>
+                </tr>
+                <tr v-if="!filteredUsers.length">
+                  <td colspan="6" class="py-10 text-center text-gray-400">No users found.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-footer"><span>Showing {{ filteredUsers.length }} of {{ users.length }} users</span>
+            <div class="flex gap-1"><button disabled>Previous</button><button class="current">1</button><button
+                disabled>Next</button></div>
+          </div>
         </section>
       </main>
     </div>
 
-    <div v-if="isModalOpen" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="user-modal-title" @click.self="closeModal">
+    <div v-if="isModalOpen" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="user-modal-title"
+      @click.self="closeModal">
       <div class="modal">
-        <div class="mb-6 flex items-center justify-between"><div><h2 id="user-modal-title" class="text-xl font-semibold text-gray-800">{{ editingId ? 'Edit User' : 'Add New User' }}</h2><p class="mt-1 text-xs text-gray-400">Assign account details, role, and access status.</p></div><button type="button" class="text-2xl text-gray-400" aria-label="Close" @click="closeModal">×</button></div>
+        <div class="mb-6 flex items-center justify-between">
+          <div>
+            <h2 id="user-modal-title" class="text-xl font-semibold text-gray-800">{{ editingId ? 'Edit User' : 'Add New User' }}</h2>
+            <p class="mt-1 text-xs text-gray-400">Assign account details, role, and access status.</p>
+          </div><button type="button" class="text-2xl text-gray-400" aria-label="Close" @click="closeModal">Ã—</button>
+        </div>
         <form @submit.prevent="saveUser">
-          <div class="form-grid"><label>First Name *<input v-model="form.firstName" type="text"></label><label>Last Name *<input v-model="form.lastName" type="text"></label><label class="sm:col-span-2">Email Address *<input v-model="form.email" type="email" placeholder="user@dswd.gov.ph"></label><label>Role *<select v-model="form.role"><option value="" disabled>Select role</option><option>Admin</option><option>Social Worker</option><option>Case Worker</option><option>Viewer</option></select></label><label>Department<select v-model="form.department"><option value="">Select department</option><option>PSB Admin</option><option>Child Welfare</option><option>Senior Citizen</option><option>Disability</option><option>Women's Welfare</option><option>Family Support</option><option>Records</option></select></label><label>Status *<select v-model="form.status"><option value="" disabled>Select status</option><option>Active</option><option>Inactive</option><option>Pending</option></select></label><label v-if="!editingId">Password *<input v-model="form.password" type="password" placeholder="Minimum 8 characters"></label></div>
-          <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4 text-sm text-gray-600"><p class="font-medium text-[#003366]">Permission Summary</p><p class="mt-1 text-xs text-gray-500">Admins have full access, Social Workers manage cases, Case Workers update assigned records, and Viewers have read-only access.</p></div>
-          <p v-if="formError" class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">{{ formError }}</p>
-          <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-4"><button type="button" class="secondary-button" @click="closeModal">Cancel</button><button type="submit" class="primary-button">Save User</button></div>
+          <div class="form-grid"><label>First Name *<input v-model="form.firstName" type="text"></label><label>Last Name
+              *<input v-model="form.lastName" type="text"></label><label class="sm:col-span-2">Email Address *<input
+                v-model="form.email" type="email" placeholder="user@dswd.gov.ph"></label><label>Role *<select
+                v-model="form.role">
+                <option value="" disabled>Select role</option>
+                <option>Admin</option>
+                <option>Social Worker</option>
+                <option>Case Worker</option>
+                <option>Viewer</option>
+              </select></label><label>Department<select v-model="form.department">
+                <option value="">Select department</option>
+                <option>PSB Admin</option>
+                <option>Child Welfare</option>
+                <option>Senior Citizen</option>
+                <option>Disability</option>
+                <option>Women's Welfare</option>
+                <option>Family Support</option>
+                <option>Records</option>
+              </select></label><label>Status *<select v-model="form.status">
+                <option value="" disabled>Select status</option>
+                <option>Active</option>
+                <option>Inactive</option>
+                <option>Pending</option>
+              </select></label><label v-if="!editingId">Password *<input v-model="form.password" type="password"
+                placeholder="Minimum 8 characters"></label></div>
+          <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4 text-sm text-gray-600">
+            <p class="font-medium text-[#003366]">Permission Summary</p>
+            <p class="mt-1 text-xs text-gray-500">Admins have full access, Social Workers manage cases, Case Workers
+              update assigned records, and Viewers have read-only access.</p>
+          </div>
+          <p v-if="formError" class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">{{ formError
+            }}</p>
+          <div class="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-4"><button type="button"
+              class="secondary-button" @click="closeModal">Cancel</button><button type="submit"
+              class="primary-button">Save User</button></div>
         </form>
       </div>
     </div>

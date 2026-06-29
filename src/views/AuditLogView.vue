@@ -1,11 +1,8 @@
-<script setup>
+﻿<script setup>
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import AppSidebar from '../components/AppSidebar.vue'
 import AppIcon from '../components/AppIcon.vue'
-import { useAuthStore } from '../stores/auth'
 
-const router = useRouter()
-const authStore = useAuthStore()
 const isSidebarOpen = ref(false)
 const selectedLog = ref(null)
 const searchQuery = ref('')
@@ -13,18 +10,6 @@ const actionFilter = ref('All Actions')
 const userFilter = ref('All Users')
 const dateFilter = ref('')
 const exportMessage = ref('')
-
-const navigation = [
-  { label: 'Dashboard', icon: 'dashboard', route: 'dashboard' },
-  { label: 'Referrals', icon: 'referrals', badge: '24', route: 'referrals' },
-  { label: 'Referrals for Action', icon: 'clock', badge: '7', route: 'actions' },
-  { label: 'User Management', icon: 'users', route: 'users' },
-  { label: 'Settings', icon: 'settings', route: 'settings' },
-  { label: 'Reference Data', icon: 'database', route: 'reference' },
-  { label: 'Reports', icon: 'reports', route: 'reports' },
-  { label: 'Archive', icon: 'archive', route: 'archive' },
-  { label: 'Audit Log', icon: 'audit', route: 'audit' },
-]
 
 const logs = [
   { id: 1, activity: 'User Created', user: 'M. D. Reyes', action: 'Create', description: 'Created new user account for A. Aguilar', ip: '192.168.1.100', date: '2026-06-18', timestamp: '2026-06-18 14:32:45', relativeTime: '2 min ago', icon: 'users' },
@@ -45,11 +30,6 @@ const filteredLogs = computed(() => {
   })
 })
 
-const navigate = (item) => { if (item.route) router.push({ name: item.route }) }
-const logout = async () => {
-  await authStore.logout()
-  router.replace({ name: 'login' })
-}
 const clearFilters = () => {
   searchQuery.value = ''
   actionFilter.value = 'All Actions'
@@ -74,33 +54,7 @@ const exportLogs = () => {
 
 <template>
   <div class="page-shell">
-    <div v-if="isSidebarOpen" class="fixed inset-0 z-30 bg-slate-950/45 md:hidden" @click="isSidebarOpen = false"></div>
-    <aside class="sidebar" :class="{ open: isSidebarOpen }">
-      <div class="brand">
-        <div class="logo"><img src="/dswdlogo_notext.png" alt="DSWD Logo"></div><span>PSB · RMS</span><button
-          class="ml-auto md:hidden" type="button" aria-label="Close menu" @click="isSidebarOpen = false">
-          <AppIcon name="close" class="h-5 w-5" />
-        </button>
-      </div>
-      <nav class="scrollable flex-1 space-y-1.5 overflow-y-auto px-3 py-5" aria-label="Main navigation">
-        <button v-for="item in navigation" :key="item.label" type="button" class="nav-item"
-          :class="{ active: item.route === 'audit' }" @click="navigate(item)">
-          <AppIcon :name="item.icon" class="h-5 w-5 shrink-0" /><span>{{ item.label }}</span><span v-if="item.badge"
-            class="badge">{{ item.badge }}</span>
-        </button>
-      </nav>
-      <div class="profile">
-        <div class="avatar">MR</div>
-        <div class="min-w-0">
-          <p class="truncate text-xs text-white/90">M. D. Reyes</p>
-          <p class="text-[11px] text-white/50">PSB · Admin</p>
-        </div><button class="ml-auto text-white/40 hover:text-white" type="button" aria-label="Log out"
-          @click="logout">
-          <AppIcon name="logout" class="h-4 w-4" />
-        </button>
-      </div>
-    </aside>
-
+    <AppSidebar v-model:open="isSidebarOpen" active-route="audit" />
     <div class="flex min-w-0 flex-1 flex-col">
       <header class="topbar">
         <div class="flex min-w-0 items-center gap-3"><button class="menu-button md:hidden" type="button"
