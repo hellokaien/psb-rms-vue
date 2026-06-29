@@ -1,6 +1,7 @@
-<script setup>
+﻿<script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import AppSidebar from '../components/AppSidebar.vue'
 import AppIcon from '../components/AppIcon.vue'
 
 const route = useRoute()
@@ -12,18 +13,6 @@ const searchQuery = ref('')
 const statusFilter = ref('All Status')
 const sortOrder = ref('newest')
 const formError = ref('')
-
-const navigation = [
-  { label: 'Dashboard', icon: 'dashboard', route: 'dashboard' },
-  { label: 'Referrals', icon: 'referrals', badge: '24', route: 'referrals' },
-  { label: 'Referrals for Action', icon: 'clock', badge: '7', route: 'actions' },
-  { label: 'User Management', icon: 'users', route: 'users' },
-  { label: 'Settings', icon: 'settings', route: 'settings' },
-  { label: 'Reference Data', icon: 'database', route: 'reference' },
-  { label: 'Reports', icon: 'reports', route: 'reports' },
-  { label: 'Archive', icon: 'archive', route: 'archive' },
-  { label: 'Audit Log', icon: 'audit', route: 'audit' },
-]
 
 const referrals = ref([
   { id: 'R-2026-0421', client: 'Maria Cruz', type: 'Child Welfare', date: '2026-06-17', status: 'For Action' },
@@ -61,9 +50,6 @@ const filteredReferrals = computed(() => {
 })
 
 const statusClass = (status) => `status-${status.toLowerCase().replace(' ', '-')}`
-const navigate = (item) => {
-  if (item.route) router.push({ name: item.route })
-}
 const openModal = () => {
   currentStep.value = 1
   formError.value = ''
@@ -107,35 +93,8 @@ onMounted(() => {
 
 <template>
   <div class="page-shell">
-    <div v-if="isSidebarOpen" class="fixed inset-0 z-30 bg-slate-950/45 md:hidden" @click="isSidebarOpen = false"></div>
-    <aside class="sidebar" :class="{ open: isSidebarOpen }">
-      <div class="brand">
-        <div class="logo"><img src="/dswdlogo_notext.png" alt="DSWD Logo"></div><span>PSB · RMS</span>
-        <button class="ml-auto md:hidden" type="button" aria-label="Close menu" @click="isSidebarOpen = false">
-          <AppIcon name="close" class="h-5 w-5" />
-        </button>
-      </div>
-      <nav class="scrollable flex-1 space-y-1.5 overflow-y-auto px-3 py-5" aria-label="Main navigation">
-        <button v-for="item in navigation" :key="item.label" type="button" class="nav-item"
-          :class="{ active: item.route === 'referrals' }" @click="navigate(item)">
-          <AppIcon :name="item.icon" class="h-5 w-5 shrink-0" /><span>{{ item.label }}</span><span v-if="item.badge"
-            class="badge">{{ item.badge }}</span>
-        </button>
-      </nav>
-      <div class="profile">
-        <div class="avatar">MR</div>
-        <div class="min-w-0">
-          <p class="truncate text-xs text-white/90">M. D. Reyes</p>
-          <p class="text-[11px] text-white/50">PSB · Admin</p>
-        </div>
-        <button class="ml-auto text-white/40 hover:text-white" type="button" aria-label="Log out"
-          @click="router.push({ name: 'login' })">
-          <AppIcon name="logout" class="h-4 w-4" />
-        </button>
-      </div>
-    </aside>
-
-    <div class="flex min-w-0 flex-1 flex-col">
+    <AppSidebar v-model:open="isSidebarOpen" active-route="referrals" />
+<div class="flex min-w-0 flex-1 flex-col">
       <header class="topbar">
         <div class="flex min-w-0 items-center gap-3">
           <button class="menu-button md:hidden" type="button" aria-label="Open menu" @click="isSidebarOpen = true">
