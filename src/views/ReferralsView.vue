@@ -17,6 +17,8 @@ const isDetailsModalOpen = ref(false)
 const isMemoPreviewOpen = ref(false)
 const isExistingMemoDialogOpen = ref(false)
 const editingReferralId = ref(null)
+const isServiceModalOpen = ref(false)
+const editingServiceId = ref(null)
 const currentStep = ref(1)
 const searchQuery = ref('')
 const statusFilter = ref('All Status')
@@ -28,6 +30,9 @@ const submitting = ref(false)
 const detailsLoading = ref(false)
 const detailsError = ref('')
 const isGeneratingPDF = ref(false)
+const isFinalizing = ref(false)
+const savingService = ref(false)
+const serviceError = ref('')
 
 const referrals = ref([])
 const selectedReferral = ref(null)
@@ -104,9 +109,16 @@ const form = reactive({
   parties: [emptyParty()],
   referral: emptyReferral(),
 })
+const serviceForm = reactive({
+  service_name: '',
+  program_id: '',
+  amount: '',
+  notes: '',
+})
 
 const steps = ['Profiles', 'Referral Details', 'Memorandum', 'Attachments']
 const isEditingReferral = computed(() => Boolean(editingReferralId.value))
+const isFinalizedReferral = computed(() => selectedReferral.value?.status === 'APPROVED')
 const extensionOptions = ['', 'Jr.', 'Sr.', 'II', 'III', 'IV', 'V']
 const sexOptions = ['Female', 'Male']
 const civilStatusOptions = ['Single', 'Married', 'Widowed', 'Separated']
@@ -198,6 +210,13 @@ const sanitizeHtml = (html, fallback = 'N/A') => {
 }
 const parsePayload = async (response) => response.json().catch(() => ({}))
 const nullable = (value) => value === '' ? null : value
+const currency = (value) => Number(value || 0).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' })
+const encoderName = (encoder) => encoder ? [encoder.first_name, encoder.middle_name, encoder.last_name, encoder.extension_name].filter(Boolean).join(' ') : '---'
+const syncReferral = (referral) => {
+  selectedReferral.value = referral
+  const index = referrals.value.findIndex((item) => item.id === referral.id)
+  if (index >= 0) referrals.value.splice(index, 1, referral)
+}
 
 async function loadReferences() {
   try {
@@ -370,8 +389,111 @@ const closeDetailsModal = () => {
   isDetailsModalOpen.value = false
   isMemoPreviewOpen.value = false
   isExistingMemoDialogOpen.value = false
+  isServiceModalOpen.value = false
   selectedReferral.value = null
   detailsError.value = ''
+  serviceError.value = ''
+}
+const finalizeReferral = async () => {
+  if (!selectedReferral.value?.id || isFinalizing.value) return
+  if (!window.confirm('Finalize this referral? This will update the status to APPROVED and enable Provided Services.')) return
+
+  isFinalizing.value = true
+  detailsError.value = ''
+  try {
+    const response = await request(`/auth/referrals/${selectedReferral.value.id}/finalize`, { method: 'POST' })
+    const payload = await parsePayload(response)
+    if (!response.ok) {
+      detailsError.value = payload.message || 'Unable to finalize referral.'
+      return
+    }
+    syncReferral(payload.referral)
+  } catch {
+    detailsError.value = 'Unable to finalize referral right now.'
+  } finally {
+    isFinalizing.value = false
+  }
+}
+const resetServiceForm = () => {
+  editingServiceId.value = null
+  serviceError.value = ''
+  Object.assign(serviceForm, {
+    service_name: '',
+    program_id: '',
+    amount: '',
+    notes: '',
+  })
+}
+const openServiceModal = (service = null) => {
+  if (!isFinalizedReferral.value) return
+  resetServiceForm()
+  if (service) {
+    editingServiceId.value = service.id
+    Object.assign(serviceForm, {
+      service_name: service.service_name || '',
+      program_id: service.program_id || '',
+      amount: service.amount ?? '',
+      notes: service.notes || '',
+    })
+  }
+  isServiceModalOpen.value = true
+}
+const closeServiceModal = () => {
+  isServiceModalOpen.value = false
+  resetServiceForm()
+}
+const saveService = async () => {
+  if (!selectedReferral.value?.id) return
+  if (!serviceForm.service_name.trim() || !serviceForm.program_id) {
+    serviceError.value = 'Service name and providing program are required.'
+    return
+  }
+
+  savingService.value = true
+  serviceError.value = ''
+  try {
+    const body = JSON.stringify({
+      service_name: serviceForm.service_name.trim(),
+      program_id: Number(serviceForm.program_id),
+      amount: serviceForm.amount === '' ? null : Number(serviceForm.amount),
+      notes: nullable(serviceForm.notes.trim()),
+    })
+    const endpoint = editingServiceId.value
+      ? `/auth/referrals/services/${editingServiceId.value}`
+      : `/auth/referrals/${selectedReferral.value.id}/services`
+    const response = await request(endpoint, {
+      method: editingServiceId.value ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    })
+    const payload = await parsePayload(response)
+    if (!response.ok) {
+      serviceError.value = payload.message || 'Unable to save provided service.'
+      return
+    }
+    syncReferral(payload.referral)
+    closeServiceModal()
+  } catch {
+    serviceError.value = 'Unable to save provided service right now.'
+  } finally {
+    savingService.value = false
+  }
+}
+const deleteService = async (service) => {
+  if (!service?.id || !window.confirm('Delete this provided service?')) return
+
+  serviceError.value = ''
+  try {
+    const response = await request(`/auth/referrals/services/${service.id}`, { method: 'DELETE' })
+    const payload = await parsePayload(response)
+    if (!response.ok) {
+      serviceError.value = payload.message || 'Unable to delete provided service.'
+      return
+    }
+    syncReferral(payload.referral)
+  } catch {
+    serviceError.value = 'Unable to delete provided service right now.'
+  }
 }
 const openMemoPreview = () => {
   isMemoPreviewOpen.value = true
@@ -794,9 +916,13 @@ onMounted(async () => {
             <p class="text-xs text-gray-400">{{ selectedReferral?.drn || 'Loading referral...' }}</p>
           </div>
           <div class="details-header-actions">
-            <button v-if="selectedReferral && !detailsLoading" type="button" class="secondary-button" @click="openEditModal">
+            <button v-if="selectedReferral && !detailsLoading && !isFinalizedReferral" type="button" class="secondary-button " @click="openEditModal">
               Edit
             </button>
+            <button v-if="selectedReferral && !detailsLoading && !isFinalizedReferral" type="button" class="finalize-button" :disabled="isFinalizing" @click="finalizeReferral">
+              {{ isFinalizing ? 'Finalizing...' : 'Finalize Referral' }}
+            </button>
+            <span v-if="isFinalizedReferral" class="finalized-badge">Finalized / Approved</span>
             <button type="button" class="text-2xl text-gray-400" aria-label="Close" @click="closeDetailsModal">&times;</button>
           </div>
         </div>
@@ -849,6 +975,47 @@ onMounted(async () => {
                     <div class="wide"><span>Case / Concern</span><div class="rich-content" v-html="sanitizeHtml(selectedReferral.memo_case_concern, 'No specific concern indicated.')"></div></div>
                     <div class="wide"><span>Remarks</span><div class="rich-content" v-html="sanitizeHtml(selectedReferral.memo_remarks, 'N/A')"></div></div>
                   </div>
+                </section>
+
+                <section class="detail-section">
+                  <div class="section-title">
+                    <h3>Provided Services</h3>
+                    <button v-if="isFinalizedReferral" type="button" class="section-action-button" @click="openServiceModal()">
+                      Add Service
+                    </button>
+                  </div>
+
+                  <p v-if="!isFinalizedReferral" class="info-message">Referral must be finalized (APPROVED) before adding or managing services.</p>
+                  <p v-if="serviceError && !isServiceModalOpen" class="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">{{ serviceError }}</p>
+
+                  <div v-if="selectedReferral.services?.length" class="services-table-wrap">
+                    <table class="services-table">
+                      <thead>
+                        <tr>
+                          <th>Service Name</th>
+                          <th>Program</th>
+                          <th>Amount</th>
+                          <th>Encoder</th>
+                          <th>Notes</th>
+                          <th v-if="isFinalizedReferral" class="text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="service in selectedReferral.services" :key="service.id">
+                          <td class="font-semibold text-gray-800">{{ service.service_name }}</td>
+                          <td>{{ service.program?.name || '---' }}</td>
+                          <td>{{ service.amount !== null && service.amount !== undefined ? currency(service.amount) : '---' }}</td>
+                          <td>{{ encoderName(service.encoder) }}</td>
+                          <td>{{ service.notes || '---' }}</td>
+                          <td v-if="isFinalizedReferral" class="service-actions">
+                            <button type="button" @click="openServiceModal(service)">Edit</button>
+                            <button type="button" class="danger-link" @click="deleteService(service)">Delete</button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <p v-else class="empty-text">No services have been recorded for this referral yet.</p>
                 </section>
               </div>
 
@@ -1024,6 +1191,32 @@ onMounted(async () => {
           </div>
         </div>
       </div>
+    </div>
+
+    <div v-if="isServiceModalOpen && selectedReferral" class="modal-overlay service-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="service-modal-title">
+      <form class="service-modal" @submit.prevent="saveService">
+        <div class="service-modal-header">
+          <div>
+            <h2 id="service-modal-title">{{ editingServiceId ? 'Edit' : 'Add' }} Provided Service</h2>
+            <p>{{ selectedReferral.drn }}</p>
+          </div>
+          <button type="button" aria-label="Close provided service modal" @click="closeServiceModal">&times;</button>
+        </div>
+
+        <div class="form-grid">
+          <label class="sm:col-span-2">Service Name *<input v-model="serviceForm.service_name" type="text" placeholder="e.g., Financial Assistance"></label>
+          <label>Providing Program *<select v-model="serviceForm.program_id"><option value="" disabled>Select program</option><option v-for="program in programs" :key="program.id" :value="program.id">{{ program.name }}</option></select></label>
+          <label>Amount (PHP)<input v-model="serviceForm.amount" type="number" min="0" step="0.01" placeholder="0.00"></label>
+          <label class="sm:col-span-2">Notes / Details<textarea v-model="serviceForm.notes" rows="4" placeholder="Additional details about the service provided..."></textarea></label>
+        </div>
+
+        <p v-if="serviceError" class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">{{ serviceError }}</p>
+
+        <div class="service-modal-actions">
+          <button type="button" class="secondary-button" :disabled="savingService" @click="closeServiceModal">Cancel</button>
+          <button type="submit" class="primary-button" :disabled="savingService">{{ savingService ? 'Saving...' : `${editingServiceId ? 'Update' : 'Save'} Service` }}</button>
+        </div>
+      </form>
     </div>
 
     <div v-if="isExistingMemoDialogOpen && selectedReferral" class="modal-overlay memo-decision-overlay" role="dialog" aria-modal="true" aria-labelledby="memo-decision-title">
@@ -1250,6 +1443,35 @@ tbody tr:hover {
   display: flex;
   align-items: center;
   gap: .5rem
+}
+
+.finalize-button {
+  border-radius: .75rem;
+  background: #15803d;
+  padding: .625rem 1rem;
+  color: white;
+  font-size: .8rem;
+  font-weight: 700;
+  transition: background .2s ease
+}
+
+.finalize-button:hover {
+  background: #166534
+}
+
+.finalize-button:disabled {
+  cursor: wait;
+  opacity: .75
+}
+
+.finalized-badge {
+  border-radius: 999px;
+  background: #dcfce7;
+  padding: .45rem .8rem;
+  color: #15803d;
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase
 }
 
 .memo-preview-modal {
@@ -1499,6 +1721,125 @@ tbody tr:hover {
   color: #1d4ed8;
   font-size: .7rem;
   font-weight: 700
+}
+
+.section-action-button {
+  border-radius: .65rem;
+  background: #003366;
+  padding: .45rem .75rem;
+  color: white;
+  font-size: .75rem;
+  font-weight: 700
+}
+
+.section-action-button:hover {
+  background: #002244
+}
+
+.info-message {
+  border-radius: .75rem;
+  background: #eff6ff;
+  padding: .75rem;
+  color: #1d4ed8;
+  font-size: .85rem
+}
+
+.services-table-wrap {
+  overflow-x: auto
+}
+
+.services-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse
+}
+
+.services-table th {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-align: left;
+  text-transform: uppercase
+}
+
+.services-table th,
+.services-table td {
+  border-bottom: 1px solid #eef2f7;
+  padding: .75rem;
+  vertical-align: top
+}
+
+.services-table td {
+  color: #475569;
+  font-size: .85rem
+}
+
+.service-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .6rem;
+  white-space: nowrap
+}
+
+.service-actions button {
+  color: #2563eb;
+  font-size: .8rem;
+  font-weight: 700
+}
+
+.service-actions .danger-link {
+  color: #dc2626
+}
+
+.service-modal-overlay {
+  z-index: 160
+}
+
+.service-modal {
+  width: min(100%, 560px);
+  border-radius: 1.25rem;
+  background: white;
+  padding: 1.25rem;
+  box-shadow: 0 25px 50px -12px rgb(0 0 0/25%)
+}
+
+.service-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #eef2f7;
+  padding-bottom: 1rem
+}
+
+.service-modal-header h2 {
+  color: #1f2937;
+  font-size: 1.125rem;
+  font-weight: 700
+}
+
+.service-modal-header p {
+  margin-top: .2rem;
+  color: #94a3b8;
+  font-size: .8rem
+}
+
+.service-modal-header button {
+  color: #94a3b8;
+  font-size: 1.75rem;
+  line-height: 1
+}
+
+.service-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .75rem;
+  margin-top: 1.25rem;
+  border-top: 1px solid #eef2f7;
+  padding-top: 1rem
 }
 
 .detail-grid {
@@ -1986,7 +2327,15 @@ tbody tr:hover {
   box-shadow: 0 0 0 3px rgb(201 168 62/15%)
 }
 
-.secondary-button,
+.secondary-button {
+  border: 1px solid #e5e7eb;
+  border-radius: .75rem;
+  padding: .625rem 1rem;
+  color: #4b5563;
+  font-size: .875rem
+}
+
+
 .danger-button {
   border: 1px solid #e5e7eb;
   border-radius: .75rem;
