@@ -133,14 +133,20 @@ function updatePassword() {
             <span class="active-pill">Active</span>
           </div>
           <div class="supporting-row">
-            <span><AppIcon name="folder" class="h-4 w-4" /> PSB Admin Department</span>
-            <span><AppIcon name="clock" class="h-4 w-4" /> Joined: {{ createdAt }}</span>
-            <span><AppIcon name="audit" class="h-4 w-4" /> Updated: {{ updatedAt }}</span>
+            <span>
+              <AppIcon name="folder" class="h-4 w-4" /> PSB Admin Department
+            </span>
+            <span>
+              <AppIcon name="clock" class="h-4 w-4" /> Joined: {{ createdAt }}
+            </span>
+            <span>
+              <AppIcon name="audit" class="h-4 w-4" /> Updated: {{ updatedAt }}
+            </span>
           </div>
         </div>
       </div>
 
-      <div class="profile-actions">
+      <!-- <div class="profile-actions">
         <button type="button" class="icon-button" aria-label="Change password" @click="openChangePassword">
           <AppIcon name="key" class="h-4 w-4" />
         </button>
@@ -149,6 +155,7 @@ function updatePassword() {
           Edit Profile
         </button>
       </div>
+      -->
     </section>
 
     <section class="stats-grid" aria-label="Profile statistics">
@@ -159,14 +166,8 @@ function updatePassword() {
     </section>
 
     <nav class="profile-tabs" aria-label="Profile sections">
-      <button
-        v-for="tab in tabs"
-        :key="tab.id"
-        type="button"
-        class="nav-tab"
-        :class="{ active: activeTab === tab.id }"
-        @click="activeTab = tab.id"
-      >
+      <button v-for="tab in tabs" :key="tab.id" type="button" class="nav-tab" :class="{ active: activeTab === tab.id }"
+        @click="activeTab = tab.id">
         <AppIcon :name="tab.icon" class="h-4 w-4" />
         {{ tab.label }}
       </button>
@@ -179,10 +180,19 @@ function updatePassword() {
         <label>Last Name *<input :value="lastName" type="text"></label>
         <label>Middle Name<input type="text" placeholder="Not provided"></label>
         <label>Date of Birth<input type="date"></label>
-        <label>Gender<select><option>Prefer not to say</option><option>Female</option><option>Male</option></select></label>
+        <label>Gender<select>
+            <option>Prefer not to say</option>
+            <option>Female</option>
+            <option>Male</option>
+          </select></label>
         <label>Email Address *<input :value="email" type="email"></label>
         <label>Department<input value="PSB Admin Department" type="text"></label>
-        <label>Role<select><option>Admin</option><option>Social Worker</option><option>Case Worker</option><option>Viewer</option></select></label>
+        <label>Role<select>
+            <option>Admin</option>
+            <option>Social Worker</option>
+            <option>Case Worker</option>
+            <option>Viewer</option>
+          </select></label>
       </div>
     </section>
 
@@ -190,9 +200,12 @@ function updatePassword() {
       <div class="profile-card">
         <h3>Security Settings</h3>
         <div class="setting-list">
-          <ToggleRow v-model="preferences.twoFactor" title="Two-Factor Authentication" description="Add an extra layer of security to your account" />
-          <ToggleRow v-model="preferences.securityEmails" title="Email Notifications" description="Receive security alerts via email" />
-          <ToggleRow v-model="preferences.loginAlerts" title="Login Alerts" description="Get notified of new login attempts" />
+          <ToggleRow v-model="preferences.twoFactor" title="Two-Factor Authentication"
+            description="Add an extra layer of security to your account" />
+          <ToggleRow v-model="preferences.securityEmails" title="Email Notifications"
+            description="Receive security alerts via email" />
+          <ToggleRow v-model="preferences.loginAlerts" title="Login Alerts"
+            description="Get notified of new login attempts" />
         </div>
         <button type="button" class="btn-gold mt-4" @click="openChangePassword">
           <AppIcon name="key" class="h-4 w-4" />
@@ -203,9 +216,12 @@ function updatePassword() {
       <div class="profile-card">
         <h3>Recent Login History</h3>
         <div class="login-list">
-          <div><span><strong>Chrome - Windows</strong><small>192.168.1.100 - Manila, PH</small></span><em>Current Session</em></div>
-          <div><span><strong>Firefox - Windows</strong><small>192.168.1.105 - Manila, PH</small></span><time>2 hours ago</time></div>
-          <div><span><strong>Safari - iOS</strong><small>192.168.1.110 - Manila, PH</small></span><time>1 day ago</time></div>
+          <div><span><strong>Chrome - Windows</strong><small>192.168.1.100 - Manila, PH</small></span><em>Current
+              Session</em></div>
+          <div><span><strong>Firefox - Windows</strong><small>192.168.1.105 - Manila, PH</small></span><time>2 hours
+              ago</time></div>
+          <div><span><strong>Safari - iOS</strong><small>192.168.1.110 - Manila, PH</small></span><time>1 day ago</time>
+          </div>
         </div>
       </div>
     </section>
@@ -214,22 +230,28 @@ function updatePassword() {
       <div class="profile-card">
         <h3>Display Preferences</h3>
         <div class="theme-group" aria-label="Theme preference">
-          <button v-for="theme in ['Light', 'Dark', 'System Default']" :key="theme" type="button" :class="{ active: preferences.theme === theme }" @click="preferences.theme = theme">
+          <button v-for="theme in ['Light', 'Dark', 'System Default']" :key="theme" type="button"
+            :class="{ active: preferences.theme === theme }" @click="preferences.theme = theme">
             {{ theme }}
           </button>
         </div>
         <div class="setting-list mt-4">
-          <ToggleRow v-model="preferences.compactMode" title="Compact Mode" description="Reduce spacing for more content density" />
-          <ToggleRow v-model="preferences.referralBadges" title="Show Referral Badges" description="Display status badges on referral list" />
+          <ToggleRow v-model="preferences.compactMode" title="Compact Mode"
+            description="Reduce spacing for more content density" />
+          <ToggleRow v-model="preferences.referralBadges" title="Show Referral Badges"
+            description="Display status badges on referral list" />
         </div>
       </div>
 
       <div class="profile-card">
         <h3>Notification Preferences</h3>
         <div class="setting-list">
-          <ToggleRow v-model="preferences.newReferralAlerts" title="New Referral Alerts" description="Get notified when new referrals are created" />
-          <ToggleRow v-model="preferences.referralUpdates" title="Referral Updates" description="Status changes and action updates" />
-          <ToggleRow v-model="preferences.systemAnnouncements" title="System Announcements" description="Important system updates and news" />
+          <ToggleRow v-model="preferences.newReferralAlerts" title="New Referral Alerts"
+            description="Get notified when new referrals are created" />
+          <ToggleRow v-model="preferences.referralUpdates" title="Referral Updates"
+            description="Status changes and action updates" />
+          <ToggleRow v-model="preferences.systemAnnouncements" title="System Announcements"
+            description="Important system updates and news" />
         </div>
       </div>
     </section>
@@ -254,21 +276,28 @@ function updatePassword() {
 
     <footer class="profile-footer">
       <span>PSB Referral Management - v2.0</span>
-      <span><AppIcon name="lock" class="h-3.5 w-3.5" /> Secured by Google OAuth</span>
+      <span>
+        <AppIcon name="lock" class="h-3.5 w-3.5" /> Secured by Google OAuth
+      </span>
     </footer>
 
     <p v-if="feedback" class="feedback" role="status">{{ feedback }}</p>
 
-    <div v-if="showPasswordModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="password-modal-title" @click.self="closePasswordModal">
+    <div v-if="showPasswordModal" class="modal-overlay" role="dialog" aria-modal="true"
+      aria-labelledby="password-modal-title" @click.self="closePasswordModal">
       <form class="modal-content" @submit.prevent="updatePassword">
         <div class="modal-header">
           <h3 id="password-modal-title">Change Password</h3>
           <button type="button" aria-label="Close password modal" @click="closePasswordModal">x</button>
         </div>
-        <label>Current Password *<input v-model="passwordForm.current" type="password" required placeholder="Enter current password"></label>
-        <label>New Password *<input v-model="passwordForm.next" type="password" required minlength="8" placeholder="Min 8 characters"></label>
-        <label>Confirm New Password *<input v-model="passwordForm.confirm" type="password" required minlength="8" placeholder="Confirm new password"></label>
-        <p class="password-note">Password must be at least 8 characters and include uppercase, lowercase, number, and special character.</p>
+        <label>Current Password *<input v-model="passwordForm.current" type="password" required
+            placeholder="Enter current password"></label>
+        <label>New Password *<input v-model="passwordForm.next" type="password" required minlength="8"
+            placeholder="Min 8 characters"></label>
+        <label>Confirm New Password *<input v-model="passwordForm.confirm" type="password" required minlength="8"
+            placeholder="Confirm new password"></label>
+        <p class="password-note">Password must be at least 8 characters and include uppercase, lowercase, number, and
+          special character.</p>
         <div class="modal-actions">
           <button type="button" class="cancel-button" @click="closePasswordModal">Cancel</button>
           <button type="submit" class="btn-gold">
@@ -745,12 +774,35 @@ h3 {
   font-size: 0.75rem;
 }
 
-.tone-blue { background: #dbeafe; color: #2563eb; }
-.tone-green { background: #dcfce7; color: #16a34a; }
-.tone-indigo { background: #e0e7ff; color: #4f46e5; }
-.tone-amber { background: #fef3c7; color: #d97706; }
-.tone-emerald { background: #d1fae5; color: #059669; }
-.tone-rose { background: #ffe4e6; color: #e11d48; }
+.tone-blue {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.tone-green {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.tone-indigo {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.tone-amber {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.tone-emerald {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.tone-rose {
+  background: #ffe4e6;
+  color: #e11d48;
+}
 
 .profile-footer {
   display: flex;
@@ -843,6 +895,7 @@ h3 {
 }
 
 @media (max-width: 767px) {
+
   .profile-header,
   .profile-identity {
     align-items: center;

@@ -15,6 +15,8 @@ const isSidebarOpen = ref(false)
 const isModalOpen = ref(false)
 const isDetailsModalOpen = ref(false)
 const isMemoPreviewOpen = ref(false)
+const isExistingMemoDialogOpen = ref(false)
+const editingReferralId = ref(null)
 const currentStep = ref(1)
 const searchQuery = ref('')
 const statusFilter = ref('All Status')
@@ -104,6 +106,7 @@ const form = reactive({
 })
 
 const steps = ['Profiles', 'Referral Details', 'Memorandum', 'Attachments']
+const isEditingReferral = computed(() => Boolean(editingReferralId.value))
 const extensionOptions = ['', 'Jr.', 'Sr.', 'II', 'III', 'IV', 'V']
 const sexOptions = ['Female', 'Male']
 const civilStatusOptions = ['Single', 'Married', 'Widowed', 'Separated']
@@ -167,10 +170,16 @@ const firstClientName = (referral) => {
 }
 const fullName = (client) => client ? [client.first_name, client.middle_name, client.last_name, client.ext_name].filter(Boolean).join(' ') : 'N/A'
 const formatDate = (value) => value ? new Date(value).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'
+const inputDate = (value) => value ? String(value).slice(0, 10) : ''
 const firstAddress = (party) => party?.client?.addresses?.[0] || null
 const formatAddress = (address) => {
   if (!address) return 'No address information recorded.'
   return [address.street, address.barangay, address.city, address.province, address.region].filter(Boolean).join(', ') || 'No address information recorded.'
+}
+const addressForMemo = (party) => {
+  const address = firstAddress(party)
+  if (!address) return ''
+  return [address.street, address.barangay, address.city, address.province].filter(Boolean).join(', ')
 }
 const sanitizeHtml = (html, fallback = 'N/A') => {
   if (!html) return fallback
@@ -262,11 +271,74 @@ const resetForm = () => {
   currentStep.value = 1
   formError.value = ''
   selectedFiles.value = []
+  editingReferralId.value = null
   form.parties = [emptyParty()]
   Object.assign(form.referral, emptyReferral())
 }
 const openModal = () => {
   resetForm()
+  isModalOpen.value = true
+}
+const populateFormFromReferral = (referral) => {
+  form.parties = (referral.parties?.length ? referral.parties : []).map((party) => {
+    const address = firstAddress(party) || party.address || {}
+    return {
+      id: party.id,
+      role_id: party.role_id || party.role?.id || '',
+      client: {
+        first_name: party.client?.first_name || '',
+        middle_name: party.client?.middle_name || '',
+        last_name: party.client?.last_name || '',
+        ext_name: party.client?.ext_name || '',
+        sex: party.client?.sex || '',
+        birth_date: inputDate(party.client?.birth_date),
+        civil_status: party.client?.civil_status || '',
+        email: party.client?.email || '',
+        phone_number: party.client?.phone_number || '',
+        educational_attainment: party.client?.educational_attainment || '',
+        religion: party.client?.religion || '',
+        country: party.client?.country || 'PHILIPPINES',
+        solo_parent: party.client?.solo_parent || '',
+        pwd: party.client?.pwd || '',
+        ip_membership: party.client?.ip_membership || '',
+      },
+      address: {
+        id: address.id,
+        region: address.region || '',
+        province: address.province || '',
+        city: address.city || '',
+        barangay: address.barangay || '',
+        street: address.street || '',
+      },
+    }
+  })
+  if (!form.parties.length) form.parties = [emptyParty()]
+
+  Object.assign(form.referral, {
+    drn: referral.drn || '',
+    program_id: referral.program_id || referral.program?.id || '',
+    case_category: referral.case_category || '',
+    case_sub_category: referral.case_sub_category || '',
+    mode: referral.mode || '',
+    received_date: inputDate(referral.received_date),
+    acted_date: inputDate(referral.acted_date),
+    referred_to: referral.referred_to || '',
+    memo_to_id: referral.memo_to_id || referral.memo_to?.id || '',
+    memo_from_id: referral.memo_from_id || referral.memo_from?.id || '',
+    memo_subject: referral.memo_subject || '',
+    memo_case_concern: referral.memo_case_concern || '',
+    memo_remarks: referral.memo_remarks || '',
+  })
+}
+const openEditModal = () => {
+  if (!selectedReferral.value) return
+  formError.value = ''
+  selectedFiles.value = []
+  currentStep.value = 1
+  editingReferralId.value = selectedReferral.value.id
+  populateFormFromReferral(selectedReferral.value)
+  isMemoPreviewOpen.value = false
+  isExistingMemoDialogOpen.value = false
   isModalOpen.value = true
 }
 const closeModal = () => {
@@ -297,6 +369,7 @@ const openDetailsModal = async (referral) => {
 const closeDetailsModal = () => {
   isDetailsModalOpen.value = false
   isMemoPreviewOpen.value = false
+  isExistingMemoDialogOpen.value = false
   selectedReferral.value = null
   detailsError.value = ''
 }
@@ -312,13 +385,21 @@ const generateMemoPdf = async () => {
 
   const existingMemo = memoAttachments.value[0]
   if (existingMemo) {
-    const shouldViewExisting = window.confirm('A memo has already been generated for this referral.\n\nClick OK to view the existing memo, or Cancel to generate a new version.')
-    if (shouldViewExisting) {
-      openPdf(existingMemo)
-      return
-    }
+    isExistingMemoDialogOpen.value = true
+    return
   }
 
+  await generateNewMemoPdf()
+}
+const viewExistingMemoPdf = () => {
+  const existingMemo = memoAttachments.value[0]
+  if (existingMemo) openPdf(existingMemo)
+  isExistingMemoDialogOpen.value = false
+}
+const generateNewMemoPdf = async () => {
+  if (!selectedReferral.value?.id) return
+
+  isExistingMemoDialogOpen.value = false
   isGeneratingPDF.value = true
   isMemoPreviewOpen.value = true
 
@@ -442,6 +523,7 @@ const submitReferral = async () => {
   try {
     const formData = new FormData()
     const parties = form.parties.map((party) => ({
+      id: party.id,
       role_id: Number(party.role_id),
       client: {
         ...party.client,
@@ -458,6 +540,7 @@ const submitReferral = async () => {
       },
       address: {
         ...party.address,
+        id: party.address.id,
         street: nullable(party.address.street),
       },
     }))
@@ -481,19 +564,27 @@ const submitReferral = async () => {
     formData.append('referral', JSON.stringify(referral))
     selectedFiles.value.forEach((file) => formData.append('attachments[]', file, file.name))
 
-    const response = await request('/auth/referrals/comprehensive', {
+    const endpoint = isEditingReferral.value ? `/auth/referrals/${editingReferralId.value}/comprehensive` : '/auth/referrals/comprehensive'
+    const response = await request(endpoint, {
       method: 'POST',
       body: formData,
     })
     const payload = await parsePayload(response)
     if (!response.ok) {
-      formError.value = payload.message || 'Unable to create referral.'
+      formError.value = payload.message || `Unable to ${isEditingReferral.value ? 'update' : 'create'} referral.`
       return
     }
-    referrals.value.unshift(payload.referral)
+    if (isEditingReferral.value) {
+      const index = referrals.value.findIndex((item) => item.id === payload.referral.id)
+      if (index >= 0) referrals.value.splice(index, 1, payload.referral)
+      selectedReferral.value = payload.referral
+      isDetailsModalOpen.value = true
+    } else {
+      referrals.value.unshift(payload.referral)
+    }
     closeModal()
   } catch {
-    formError.value = 'Unable to create referral right now.'
+    formError.value = `Unable to ${isEditingReferral.value ? 'update' : 'create'} referral right now.`
   } finally {
     submitting.value = false
   }
@@ -581,11 +672,11 @@ onMounted(async () => {
       </main>
     </div>
 
-    <div v-if="isModalOpen" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" @click.self="closeModal">
+    <div v-if="isModalOpen" class="modal-overlay" :class="{ 'edit-modal-overlay': isEditingReferral }" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div class="modal">
         <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4 sm:px-6">
           <div>
-            <h2 id="modal-title" class="text-lg font-semibold text-gray-800">Create New Referral</h2>
+            <h2 id="modal-title" class="text-lg font-semibold text-gray-800">{{ isEditingReferral ? 'Edit Referral' : 'Create New Referral' }}</h2>
             <p class="text-xs text-gray-400">Step {{ currentStep }} of 4 · {{ steps[currentStep - 1] }}</p>
           </div>
           <button type="button" class="text-2xl text-gray-400" aria-label="Close" @click="closeModal">&times;</button>
@@ -688,7 +779,7 @@ onMounted(async () => {
             <div class="flex gap-2">
               <button type="button" class="secondary-button" @click="closeModal">Cancel</button>
               <button v-if="currentStep < 4" type="button" class="primary-button" @click="nextStep">Next</button>
-              <button v-else type="submit" class="primary-button" :disabled="submitting">{{ submitting ? 'Submitting...' : 'Submit Referral' }}</button>
+              <button v-else type="submit" class="primary-button" :disabled="submitting">{{ submitting ? (isEditingReferral ? 'Saving...' : 'Submitting...') : (isEditingReferral ? 'Save Changes' : 'Submit Referral') }}</button>
             </div>
           </div>
         </form>
@@ -702,7 +793,12 @@ onMounted(async () => {
             <h2 id="details-title" class="text-lg font-semibold text-gray-800">Referral Details</h2>
             <p class="text-xs text-gray-400">{{ selectedReferral?.drn || 'Loading referral...' }}</p>
           </div>
-          <button type="button" class="text-2xl text-gray-400" aria-label="Close" @click="closeDetailsModal">&times;</button>
+          <div class="details-header-actions">
+            <button v-if="selectedReferral && !detailsLoading" type="button" class="secondary-button" @click="openEditModal">
+              Edit
+            </button>
+            <button type="button" class="text-2xl text-gray-400" aria-label="Close" @click="closeDetailsModal">&times;</button>
+          </div>
         </div>
 
         <div class="details-body">
@@ -823,76 +919,149 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div ref="memoDocument" class="memo-document">
-          <div class="memo-document-header">
-            <div>
-              <strong>Protective Services Bureau</strong>
-              <span>Operations Group</span>
+        <div class="memo-modal-content">
+          <div ref="memoDocument" class="memo-content">
+            <div class="memo-agency-header">
+              <div class="memo-agency-row">
+                <div class="memo-logo-wrap">
+                  <img class="memo-logo" src="/assets/dswd-with-bp-logo.png" alt="">
+                </div>
+                <div class="memo-office-title">
+                  <h2>Protective Services Bureau</h2>
+                  <h3>Operations Group</h3>
+                </div>
+              </div>
+              <div class="memo-drn">DRN: {{ selectedReferral.drn }}</div>
             </div>
-            <span>DRN: {{ selectedReferral.drn }}</span>
-          </div>
 
-          <h3>Memorandum</h3>
+            <h1 class="memo-heading">Memorandum</h1>
 
-          <div class="memo-meta">
-            <div><span>FOR</span><strong>{{ selectedReferral.memo_to?.name || '---' }}</strong><small>{{ selectedReferral.memo_to?.position || '---' }}</small><small>{{ selectedReferral.memo_to?.office || '---' }}</small></div>
-            <div><span>FROM</span><strong>{{ selectedReferral.memo_from?.position ? `The ${selectedReferral.memo_from.position}` : selectedReferral.memo_from?.name || '---' }}</strong><small>{{ selectedReferral.memo_from?.office || '---' }}</small></div>
-            <div><span>SUBJECT</span><strong>{{ selectedReferral.memo_subject || 'REFERRAL CASE' }}</strong></div>
-            <div><span>DATE</span><strong>{{ formatDate(new Date().toISOString()) }}</strong></div>
-          </div>
+            <div class="memo-meta">
+              <div class="memo-meta-row">
+                <span>FOR</span>
+                <span>:</span>
+                <div>
+                  <strong>{{ selectedReferral.memo_to?.name || '---' }}</strong>
+                  <em>{{ selectedReferral.memo_to?.position || '---' }}</em>
+                  <small>{{ selectedReferral.memo_to?.office || '---' }}</small>
+                </div>
+              </div>
+              <div class="memo-meta-row">
+                <span>FROM</span>
+                <span>:</span>
+                <div>
+                  <strong>The {{ selectedReferral.memo_from?.position || '---' }}</strong>
+                  <small>{{ selectedReferral.memo_from?.office || '---' }}</small>
+                </div>
+              </div>
+              <div class="memo-meta-row">
+                <span>SUBJECT</span>
+                <span>:</span>
+                <strong>{{ selectedReferral.memo_subject || 'REFERRAL CASE' }}</strong>
+              </div>
+              <div class="memo-meta-row">
+                <span>DATE</span>
+                <span>:</span>
+                <span>{{ formatDate(new Date().toISOString()) }}</span>
+              </div>
+            </div>
 
-          <p class="memo-intro">This is to respectfully refer the above-mentioned subject for assessment, validation and provision of necessary assistance, in accordance with applicable guidelines of the Department.</p>
+            <div class="memo-body">
+              <p class="memo-intro">This is to respectfully refer to the Field Office (FO) the above-mentioned subject for assessment, validation and provision of necessary assistance, in accordance with applicable guidelines of the Department.</p>
 
-          <table class="memo-table">
-            <tbody>
-              <tr>
-                <th>Program</th>
-                <td>{{ selectedReferral.program?.name || '---' }}</td>
-              </tr>
-              <tr>
-                <th>Referring Office / Individual</th>
-                <td>
-                  <div v-if="referringParties.length" class="memo-party-list">
-                    <div v-for="(party, index) in referringParties" :key="party.id || index">
-                      <strong>{{ fullName(party.client) }}</strong>
-                      <span>Address: {{ formatAddress(firstAddress(party)) }}</span>
-                      <span v-if="party.client?.email || party.client?.phone_number">Contact: {{ [party.client?.email, party.client?.phone_number].filter(Boolean).join(' | ') }}</span>
-                    </div>
-                  </div>
-                  <span v-else>{{ selectedReferral.referred_to || '---' }}</span>
-                </td>
-              </tr>
-              <tr>
-                <th>Details of Referred Client</th>
-                <td>
-                  <div class="memo-party-list">
-                    <div v-for="(party, index) in referredClients" :key="party.id || index">
-                      <strong>{{ fullName(party.client) }}</strong>
-                      <span>Address: {{ formatAddress(firstAddress(party)) }}</span>
-                      <span v-if="party.client?.email || party.client?.phone_number">Contact: {{ [party.client?.email, party.client?.phone_number].filter(Boolean).join(' | ') }}</span>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <th>Case / Concern</th>
-                <td><div class="rich-content" v-html="sanitizeHtml(selectedReferral.memo_case_concern, 'No specific concern indicated.')"></div></td>
-              </tr>
-              <tr v-if="selectedReferral.memo_remarks">
-                <th>Additional Notes / Remarks</th>
-                <td><div class="rich-content" v-html="sanitizeHtml(selectedReferral.memo_remarks, 'N/A')"></div></td>
-              </tr>
-            </tbody>
-          </table>
+              <table class="memo-table">
+                <tbody>
+                  <tr>
+                    <td class="memo-label-cell">Program</td>
+                    <td>{{ selectedReferral.program?.name || '---' }}</td>
+                  </tr>
+                  <tr>
+                    <td class="memo-label-cell">Referring Office / Individual</td>
+                    <td>
+                      <ul v-if="referringParties.length" class="memo-list">
+                        <li v-for="(party, index) in referringParties" :key="party.id || index">
+                          <div class="memo-party-name">{{ fullName(party.client) }}</div>
+                          <div v-if="firstAddress(party)" class="memo-party-detail"><strong>Address:</strong> {{ addressForMemo(party) }}</div>
+                          <div class="memo-party-detail"><strong>Email:</strong> {{ party.client?.email || 'Not Provided' }}</div>
+                          <div class="memo-party-detail"><strong>Phone Number:</strong> {{ party.client?.phone_number || 'Not Provided' }}</div>
+                        </li>
+                      </ul>
+                      <span v-else>{{ selectedReferral.referred_to || '---' }}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="memo-label-cell">Details of Referred Client</td>
+                    <td>
+                      <ul class="memo-list">
+                        <li v-for="(party, index) in referredClients" :key="party.id || index">
+                          <div class="memo-party-name">{{ fullName(party.client) }}</div>
+                          <div v-if="firstAddress(party)" class="memo-party-detail"><strong>Address:</strong> {{ addressForMemo(party) }}</div>
+                          <div class="memo-party-detail"><strong>Email:</strong> {{ party.client?.email || 'Not Provided' }}</div>
+                          <div class="memo-party-detail"><strong>Phone Number:</strong> {{ party.client?.phone_number || 'Not Provided' }}</div>
+                        </li>
+                      </ul>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="memo-label-cell">Case / Concern</td>
+                    <td><div class="memo-rich-text" v-html="sanitizeHtml(selectedReferral.memo_case_concern, '')"></div></td>
+                  </tr>
+                  <tr v-if="selectedReferral.memo_remarks">
+                    <td class="memo-label-cell">Additional Notes / Remarks</td>
+                    <td><div class="memo-rich-text" v-html="sanitizeHtml(selectedReferral.memo_remarks, '')"></div></td>
+                  </tr>
+                </tbody>
+              </table>
 
-          <p class="memo-intro">Please provide feedback to the referring party, copy furnish the PSB through psb@dswd.gov.ph within <strong>{{ selectedReferral.program?.memo_feedback_timeline || 'three (3) days' }}</strong> from the receipt of this endorsement.</p>
-          <p class="memo-intro">Thank you.</p>
+              <p class="memo-feedback">Please provide feedback to the referring party, copy furnish the PSB through psb@dswd.gov.ph within <strong>{{ selectedReferral.program?.memo_feedback_timeline || 'three (3) days' }}</strong> from the receipt of this endorsement.</p>
 
-          <div class="memo-signature">
-            <strong>{{ selectedReferral.memo_from?.name || '---' }}</strong>
+              <p class="memo-thanks">Thank you.</p>
+            </div>
+
+            <div class="memo-signature">
+              <p>{{ selectedReferral.memo_from?.name || '---' }}</p>
+            </div>
           </div>
         </div>
       </div>
+    </div>
+
+    <div v-if="isExistingMemoDialogOpen && selectedReferral" class="modal-overlay memo-decision-overlay" role="dialog" aria-modal="true" aria-labelledby="memo-decision-title">
+      <section class="memo-decision-dialog">
+        <button type="button" class="memo-decision-close" aria-label="Close memo option dialog" @click="isExistingMemoDialogOpen = false">
+          <AppIcon name="close" class="h-4 w-4" />
+        </button>
+
+        <div class="memo-decision-icon">
+          <AppIcon name="reports" class="h-6 w-6" />
+        </div>
+
+        <div class="memo-decision-copy">
+          <span class="eyebrow">Generated memorandum found</span>
+          <h2 id="memo-decision-title">Use existing memo or create a new one?</h2>
+          <p>
+            A PDF has already been generated for {{ selectedReferral.drn }}. You can open the latest file now, or generate a new version from the current memorandum preview.
+          </p>
+        </div>
+
+        <div v-if="memoAttachments[0]" class="memo-decision-file">
+          <AppIcon name="folder" class="h-4 w-4" />
+          <div>
+            <strong>{{ memoAttachments[0].file_name }}</strong>
+            <span>{{ memoAttachments[0].uploaded_at ? formatDate(memoAttachments[0].uploaded_at) : 'Generated automatically' }}</span>
+          </div>
+        </div>
+
+        <div class="memo-decision-actions">
+          <button type="button" class="memo-decision-secondary" @click="generateNewMemoPdf">
+            Generate new version
+          </button>
+          <button type="button" class="memo-decision-primary" @click="viewExistingMemoPdf">
+            <AppIcon name="eye" class="h-4 w-4" />
+            View existing PDF
+          </button>
+        </div>
+      </section>
     </div>
   </div>
 </template>
@@ -1059,6 +1228,10 @@ tbody tr:hover {
   backdrop-filter: blur(4px)
 }
 
+.edit-modal-overlay {
+  z-index: 120
+}
+
 .modal {
   width: 100%;
   max-width: 960px;
@@ -1073,8 +1246,17 @@ tbody tr:hover {
   max-width: 1180px
 }
 
+.details-header-actions {
+  display: flex;
+  align-items: center;
+  gap: .5rem
+}
+
 .memo-preview-modal {
-  max-width: 980px
+  max-width: 1000px;
+  overflow: hidden;
+  border-radius: .25rem;
+  background: #d1d1d1
 }
 
 .memo-preview-actions {
@@ -1085,7 +1267,159 @@ tbody tr:hover {
 
 .nested-overlay {
   z-index: 130;
-  background: rgb(15 23 42/62%)
+  background: rgb(0 0 0/50%)
+}
+
+.memo-decision-overlay {
+  z-index: 150;
+  background: rgb(15 23 42/58%)
+}
+
+.memo-decision-dialog {
+  position: relative;
+  width: min(100%, 520px);
+  overflow: hidden;
+  border: 1px solid rgb(226 232 240/90%);
+  border-radius: 1.25rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  padding: 1.5rem;
+  box-shadow: 0 24px 60px rgb(15 23 42/28%)
+}
+
+.memo-decision-dialog::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: .35rem;
+  background: linear-gradient(90deg, #003366, #c9a83e)
+}
+
+.memo-decision-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: #64748b;
+  transition: background .2s ease, color .2s ease
+}
+
+.memo-decision-close:hover {
+  background: #e2e8f0;
+  color: #0f172a
+}
+
+.memo-decision-icon {
+  display: inline-flex;
+  width: 3rem;
+  height: 3rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  background: #e0f2fe;
+  color: #0369a1
+}
+
+.memo-decision-copy {
+  margin-top: 1rem;
+  padding-right: 1.75rem
+}
+
+.memo-decision-copy h2 {
+  margin-top: .35rem;
+  color: #0f172a;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.35
+}
+
+.memo-decision-copy p {
+  margin-top: .65rem;
+  color: #475569;
+  font-size: .92rem;
+  line-height: 1.6
+}
+
+.memo-decision-file {
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  margin-top: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: .9rem;
+  background: white;
+  padding: .85rem;
+  color: #003366
+}
+
+.memo-decision-file div {
+  display: grid;
+  min-width: 0;
+  gap: .2rem
+}
+
+.memo-decision-file strong {
+  overflow: hidden;
+  color: #1e293b;
+  font-size: .85rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap
+}
+
+.memo-decision-file span {
+  color: #64748b;
+  font-size: .75rem
+}
+
+.memo-decision-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .75rem;
+  margin-top: 1.25rem
+}
+
+.memo-decision-primary,
+.memo-decision-secondary {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  border-radius: .85rem;
+  padding: .7rem 1rem;
+  font-size: .85rem;
+  font-weight: 700;
+  transition: transform .2s ease, box-shadow .2s ease, background .2s ease
+}
+
+.memo-decision-primary {
+  background: #003366;
+  color: white;
+  box-shadow: 0 12px 22px rgb(0 51 102/20%)
+}
+
+.memo-decision-primary:hover,
+.memo-decision-secondary:hover {
+  transform: translateY(-1px)
+}
+
+.memo-decision-primary:hover {
+  background: #062a50
+}
+
+.memo-decision-secondary {
+  border: 1px solid #cbd5e1;
+  background: white;
+  color: #334155
+}
+
+.memo-decision-secondary:hover {
+  background: #f1f5f9
 }
 
 .details-body {
@@ -1300,131 +1634,231 @@ tbody tr:hover {
   font-weight: 500
 }
 
-.memo-document {
-  margin: 1.25rem;
+.memo-modal-content {
+  max-height: calc(92vh - 66px);
+  overflow: auto;
+  padding: 2rem 0;
+  background: #d1d1d1
+}
+
+.memo-content {
+  width: 8.5in;
+  min-height: 11in;
+  box-sizing: border-box;
+  margin: 0 auto;
   background: white;
-  padding: 2rem;
-  color: #111827;
-  font-family: Arial, sans-serif
+  padding: .5in;
+  color: #000;
+  font-family: Inter, Arial, sans-serif;
+  font-size: 16px
 }
 
-.memo-document-header {
+.memo-agency-header {
+  margin-bottom: 2rem
+}
+
+.memo-agency-row {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 1rem;
-  border-bottom: 2px solid #111827;
-  padding-bottom: .75rem;
-  font-size: .85rem
+  flex-direction: row;
+  border-bottom: 2px solid #000;
+  padding-bottom: .5rem
 }
 
-.memo-document-header div {
-  display: grid;
-  gap: .15rem;
+.memo-logo-wrap {
+  display: flex;
+  flex: 1;
+  align-items: center
+}
+
+.memo-logo {
+  height: 4rem
+}
+
+.memo-office-title {
+  display: flex;
+  flex-direction: column;
+  font-family: 'Times New Roman', Times, serif;
+  font-weight: 700;
+  text-align: right;
   text-transform: uppercase
 }
 
-.memo-document-header strong {
-  font-size: 1.05rem
+.memo-office-title h2 {
+  font-size: 1.125rem;
+  line-height: 1.75rem
 }
 
-.memo-document h3 {
-  margin: 1.25rem 0 .75rem;
+.memo-office-title h3 {
+  text-align: center;
+  font-size: 1rem;
+  line-height: 1.5rem
+}
+
+.memo-drn {
+  margin-top: .25rem;
+  text-align: right;
+  font-size: .75rem;
+  font-weight: 700;
+  line-height: 1rem
+}
+
+.memo-heading {
+  margin-bottom: .25rem;
+  text-align: left;
   font-size: 1.25rem;
-  font-weight: 800;
+  font-weight: 700;
+  line-height: 1.75rem;
   text-transform: uppercase
 }
 
 .memo-meta {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: .75rem;
-  border-bottom: 2px solid #111827;
-  padding-bottom: 1rem
+  margin-bottom: 2rem;
+  border-bottom: 2px solid #000;
+  padding-bottom: 1rem;
+  font-size: 1rem
 }
 
-.memo-meta div {
+.memo-meta-row {
   display: grid;
-  grid-template-columns: 90px minmax(0, 1fr);
-  gap: .75rem
+  grid-template-columns: 100px 50px 1fr;
+  align-items: start
 }
 
-.memo-meta span {
-  font-weight: 800
-}
-
-.memo-meta strong,
-.memo-meta small {
-  grid-column: 2;
-  overflow-wrap: anywhere
-}
-
-.memo-meta strong {
-  font-weight: 800;
+.memo-meta-row > span:first-child,
+.memo-meta-row > span:nth-child(2) {
+  font-weight: 700;
   text-transform: uppercase
 }
 
-.memo-meta small {
-  color: #374151
+.memo-meta-row > span:nth-child(2) {
+  text-align: center
+}
+
+.memo-meta-row div {
+  display: flex;
+  flex-direction: column
+}
+
+.memo-meta-row strong {
+  font-weight: 700;
+  text-transform: uppercase
+}
+
+.memo-meta-row em {
+  font-size: .875rem;
+  font-style: italic;
+  line-height: 1.25rem
+}
+
+.memo-meta-row small {
+  font-size: .875rem;
+  line-height: 1.25rem
+}
+
+.memo-body {
+  margin-bottom: 3rem;
+  font-size: 1rem
 }
 
 .memo-intro {
-  margin: 1.25rem 0;
-  text-align: justify;
-  line-height: 1.7
+  margin-bottom: 1rem;
+  text-align: justify
 }
 
 .memo-table {
   width: 100%;
-  border-collapse: collapse;
-  font-size: .9rem
+  border-collapse: collapse
 }
 
-.memo-table th,
 .memo-table td {
-  border: 1px solid #111827;
-  padding: .75rem;
+  border: 1px solid #000;
+  padding: 8px;
+  text-align: left;
   vertical-align: top
 }
 
-.memo-table th {
-  width: 180px;
-  background: #f8fafc;
-  text-align: left
+.memo-label-cell {
+  width: 25%;
+  font-weight: 700
 }
 
-.memo-table td div {
-  display: grid;
-  gap: .15rem;
+.memo-list {
+  margin-left: 1rem;
+  list-style-type: disc
+}
+
+.memo-list li {
   margin-bottom: .5rem
 }
 
-.memo-table td .memo-party-list {
-  display: grid;
-  gap: .75rem;
-  margin-bottom: 0
-}
-
-.memo-party-list div {
-  display: grid;
-  gap: .15rem
-}
-
-.memo-table td div:last-child {
-  margin-bottom: 0
-}
-
-.memo-table td span {
-  color: #4b5563;
-  font-size: .8rem
-}
-
-.memo-signature {
-  margin-top: 5rem;
+.memo-party-name {
+  font-weight: 700;
   text-transform: uppercase
 }
 
-.memo-signature strong {
-  font-weight: 800
+.memo-party-detail {
+  margin-top: .25rem;
+  font-size: .875rem;
+  line-height: 1.25rem
+}
+
+.memo-rich-text {
+  font-size: 14px;
+  line-height: 1.6
+}
+
+.memo-rich-text :deep(p) {
+  margin-bottom: .5rem
+}
+
+.memo-rich-text :deep(ul) {
+  margin-bottom: 1rem;
+  margin-left: 1.5rem;
+  list-style-type: disc
+}
+
+.memo-rich-text :deep(ol) {
+  margin-bottom: 1rem;
+  margin-left: 1.5rem;
+  list-style-type: decimal
+}
+
+.memo-rich-text :deep(li) {
+  margin-bottom: .25rem
+}
+
+.memo-rich-text :deep(strong),
+.memo-rich-text :deep(b) {
+  font-weight: 700
+}
+
+.memo-rich-text :deep(em),
+.memo-rich-text :deep(i) {
+  font-style: italic
+}
+
+.memo-rich-text :deep(u) {
+  text-decoration: underline
+}
+
+.memo-feedback {
+  margin-top: 2rem
+}
+
+.memo-thanks {
+  margin-top: 1rem
+}
+
+.memo-signature {
+  margin-top: 5rem
+}
+
+.memo-signature p {
+  font-weight: 700;
+  text-transform: uppercase
 }
 
 .stepper {
@@ -1613,19 +2047,30 @@ tbody tr:hover {
     grid-template-columns: 1fr
   }
 
-  .memo-document {
-    margin: .75rem;
-    padding: 1rem
+  .memo-modal-content {
+    padding: 1rem;
   }
 
-  .memo-meta div {
-    grid-template-columns: 1fr;
-    gap: .2rem
+  .memo-content {
+    transform: scale(.72);
+    transform-origin: top left;
   }
 
-  .memo-meta strong,
-  .memo-meta small {
-    grid-column: 1
+  .memo-decision-dialog {
+    padding: 1.25rem
+  }
+
+  .memo-decision-copy {
+    padding-right: 0
+  }
+
+  .memo-decision-actions {
+    flex-direction: column-reverse
+  }
+
+  .memo-decision-primary,
+  .memo-decision-secondary {
+    width: 100%
   }
 
   .details-header {

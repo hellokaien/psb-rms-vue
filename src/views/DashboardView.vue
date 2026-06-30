@@ -143,7 +143,7 @@ const runQuickAction = (action) => {
 
         <footer
           class="mt-6 flex items-center justify-between border-t border-gray-200/60 pt-4 text-[11px] text-gray-400">
-          <span>PSB Referral Management · v2.0</span>
+          <span>PSB Referral Management · v1.0.0</span>
           <span class="flex items-center gap-2">
             <AppIcon name="lock" class="h-3.5 w-3.5" />Secured by Google OAuth
           </span>
