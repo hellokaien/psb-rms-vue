@@ -1,0 +1,26 @@
+Step 1: Set Up Google Cloud Console
+Before touching any code, you need to get a Client ID and Client Secret from Google.
+
+Go to the Google Cloud Console.
+
+Create a new project (or select an existing one).
+
+Navigate to APIs & Services > OAuth consent screen.
+
+Select External and click Create.
+
+Fill in the app name, user support email, and developer contact information. Click Save and Continue through the remaining steps.
+
+Navigate to APIs & Services > Credentials.
+
+Click + Create Credentials at the top and select OAuth client ID.
+
+Select Web application as the application type.
+
+Configure your URIs:
+
+Authorized JavaScript origins: http://localhost:8000 (or your local development URL).
+
+Authorized redirect URIs: http://localhost:8000/auth/google/callback
+
+Click Create and copy your Client ID and Client Secret.

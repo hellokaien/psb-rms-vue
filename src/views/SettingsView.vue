@@ -1,11 +1,22 @@
 ﻿<script setup>
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import AppSidebar from '../components/AppSidebar.vue'
 import AppIcon from '../components/AppIcon.vue'
+import { request } from '../lib/api'
 
 const isSidebarOpen = ref(false)
 const activeTab = ref('general')
 const feedback = ref('')
+const libraryError = ref('')
+const libraryLoading = ref(false)
+const savingLibrary = ref(false)
+const programs = ref([])
+const caseCategories = ref([])
+const signatories = ref([])
+const editingProgramId = ref(null)
+const editingCaseCategoryId = ref(null)
+const editingSignatoryId = ref(null)
+const signatoryEsignFile = ref(null)
 
 const tabs = [
   { id: 'general', label: 'General', icon: 'settings' },
@@ -32,6 +43,16 @@ const getStoredSettings = () => {
   }
 }
 const settings = reactive({ ...defaults, ...getStoredSettings() })
+const programForm = reactive({ name: '', code: '', description: '', memo_feedback_timeline: '' })
+const caseCategoryForm = reactive({ name: '', description: '', subcategories: [{ name: '' }] })
+const signatoryForm = reactive({
+  name: '',
+  position: '',
+  office: '',
+  is_active: true,
+  is_recipient: false,
+  is_originator: false,
+})
 
 const showFeedback = (message) => {
   feedback.value = message
@@ -50,6 +71,204 @@ const resetSettings = () => {
 const demoDangerAction = (action) => {
   if (window.confirm(`${action}? This is a demo and will not delete backend data.`)) showFeedback(`Demo only: ${action} was not executed.`)
 }
+
+const parsePayload = async (response) => response.json().catch(() => ({}))
+const setLibraryError = (message) => {
+  libraryError.value = message
+  window.setTimeout(() => { libraryError.value = '' }, 3500)
+}
+
+async function loadLibraries() {
+  libraryLoading.value = true
+  libraryError.value = ''
+
+  try {
+    const [programResponse, categoryResponse, signatoryResponse] = await Promise.all([
+      request('/auth/libraries/programs'),
+      request('/auth/libraries/case-categories'),
+      request('/auth/libraries/signatories'),
+    ])
+    const [programPayload, categoryPayload, signatoryPayload] = await Promise.all([
+      parsePayload(programResponse),
+      parsePayload(categoryResponse),
+      parsePayload(signatoryResponse),
+    ])
+
+    if (!programResponse.ok || !categoryResponse.ok || !signatoryResponse.ok) {
+      setLibraryError(programPayload.message || categoryPayload.message || signatoryPayload.message || 'Unable to load libraries.')
+      return
+    }
+
+    programs.value = programPayload.programs || []
+    caseCategories.value = categoryPayload.case_categories || []
+    signatories.value = signatoryPayload.signatories || []
+  } catch {
+    setLibraryError('Unable to load libraries right now.')
+  } finally {
+    libraryLoading.value = false
+  }
+}
+
+const resetProgramForm = () => {
+  editingProgramId.value = null
+  Object.assign(programForm, { name: '', code: '', description: '', memo_feedback_timeline: '' })
+}
+const editProgram = (program) => {
+  editingProgramId.value = program.id
+  Object.assign(programForm, {
+    name: program.name || '',
+    code: program.code || '',
+    description: program.description || '',
+    memo_feedback_timeline: program.memo_feedback_timeline || '',
+  })
+}
+const saveProgram = async () => {
+  if (!programForm.name.trim()) return setLibraryError('Program name is required.')
+  savingLibrary.value = true
+
+  try {
+    const response = await request(editingProgramId.value ? `/auth/libraries/programs/${editingProgramId.value}` : '/auth/libraries/programs', {
+      method: editingProgramId.value ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(programForm),
+    })
+    const payload = await parsePayload(response)
+    if (!response.ok) return setLibraryError(payload.message || 'Unable to save program.')
+    await loadLibraries()
+    resetProgramForm()
+    showFeedback(payload.message || 'Program saved.')
+  } catch {
+    setLibraryError('Unable to save program right now.')
+  } finally {
+    savingLibrary.value = false
+  }
+}
+const deleteProgram = async (program) => {
+  if (!window.confirm(`Remove program "${program.name}"?`)) return
+  const response = await request(`/auth/libraries/programs/${program.id}`, { method: 'DELETE' })
+  const payload = await parsePayload(response)
+  if (!response.ok) return setLibraryError(payload.message || 'Unable to remove program.')
+  programs.value = programs.value.filter((item) => item.id !== program.id)
+  showFeedback('Program removed.')
+}
+
+const resetCaseCategoryForm = () => {
+  editingCaseCategoryId.value = null
+  Object.assign(caseCategoryForm, { name: '', description: '', subcategories: [{ name: '' }] })
+}
+const editCaseCategory = (category) => {
+  editingCaseCategoryId.value = category.id
+  Object.assign(caseCategoryForm, {
+    name: category.name || '',
+    description: category.description || '',
+    subcategories: category.subcategories?.length ? category.subcategories.map((subcategory) => ({ name: subcategory.name })) : [{ name: '' }],
+  })
+}
+const addSubcategory = () => {
+  caseCategoryForm.subcategories.push({ name: '' })
+}
+const removeSubcategory = (index) => {
+  caseCategoryForm.subcategories.splice(index, 1)
+  if (!caseCategoryForm.subcategories.length) addSubcategory()
+}
+const saveCaseCategory = async () => {
+  if (!caseCategoryForm.name.trim()) return setLibraryError('Case category name is required.')
+  savingLibrary.value = true
+
+  try {
+    const payloadData = {
+      ...caseCategoryForm,
+      subcategories: caseCategoryForm.subcategories.filter((subcategory) => subcategory.name.trim()),
+    }
+    const response = await request(editingCaseCategoryId.value ? `/auth/libraries/case-categories/${editingCaseCategoryId.value}` : '/auth/libraries/case-categories', {
+      method: editingCaseCategoryId.value ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payloadData),
+    })
+    const payload = await parsePayload(response)
+    if (!response.ok) return setLibraryError(payload.message || 'Unable to save case category.')
+    await loadLibraries()
+    resetCaseCategoryForm()
+    showFeedback(payload.message || 'Case category saved.')
+  } catch {
+    setLibraryError('Unable to save case category right now.')
+  } finally {
+    savingLibrary.value = false
+  }
+}
+const deleteCaseCategory = async (category) => {
+  if (!window.confirm(`Remove case category "${category.name}"?`)) return
+  const response = await request(`/auth/libraries/case-categories/${category.id}`, { method: 'DELETE' })
+  const payload = await parsePayload(response)
+  if (!response.ok) return setLibraryError(payload.message || 'Unable to remove case category.')
+  caseCategories.value = caseCategories.value.filter((item) => item.id !== category.id)
+  showFeedback('Case category removed.')
+}
+
+const resetSignatoryForm = () => {
+  editingSignatoryId.value = null
+  signatoryEsignFile.value = null
+  Object.assign(signatoryForm, { name: '', position: '', office: '', is_active: true, is_recipient: false, is_originator: false })
+}
+const editSignatory = (signatory) => {
+  editingSignatoryId.value = signatory.id
+  signatoryEsignFile.value = null
+  Object.assign(signatoryForm, {
+    name: signatory.name || '',
+    position: signatory.position || '',
+    office: signatory.office || '',
+    is_active: Boolean(signatory.is_active),
+    is_recipient: Boolean(signatory.is_recipient),
+    is_originator: Boolean(signatory.is_originator),
+  })
+}
+const onEsignChange = (event) => {
+  signatoryEsignFile.value = event.target.files?.[0] || null
+}
+const signatoryPayload = () => {
+  const formData = new FormData()
+  formData.append('name', signatoryForm.name)
+  formData.append('position', signatoryForm.position)
+  formData.append('office', signatoryForm.office)
+  formData.append('is_active', signatoryForm.is_active ? '1' : '0')
+  formData.append('is_recipient', signatoryForm.is_recipient ? '1' : '0')
+  formData.append('is_originator', signatoryForm.is_originator ? '1' : '0')
+  if (signatoryEsignFile.value) formData.append('esign', signatoryEsignFile.value)
+  return formData
+}
+const saveSignatory = async () => {
+  if (!signatoryForm.name.trim() || !signatoryForm.position.trim() || !signatoryForm.office.trim()) {
+    return setLibraryError('Signatory name, position, and office are required.')
+  }
+
+  savingLibrary.value = true
+
+  try {
+    const response = await request(editingSignatoryId.value ? `/auth/libraries/signatories/${editingSignatoryId.value}` : '/auth/libraries/signatories', {
+      method: 'POST',
+      body: signatoryPayload(),
+    })
+    const payload = await parsePayload(response)
+    if (!response.ok) return setLibraryError(payload.message || 'Unable to save signatory.')
+    await loadLibraries()
+    resetSignatoryForm()
+    showFeedback(payload.message || 'Signatory saved.')
+  } catch {
+    setLibraryError('Unable to save signatory right now.')
+  } finally {
+    savingLibrary.value = false
+  }
+}
+const deleteSignatory = async (signatory) => {
+  if (!window.confirm(`Remove signatory "${signatory.name}"?`)) return
+  const response = await request(`/auth/libraries/signatories/${signatory.id}`, { method: 'DELETE' })
+  const payload = await parsePayload(response)
+  if (!response.ok) return setLibraryError(payload.message || 'Unable to remove signatory.')
+  signatories.value = signatories.value.filter((item) => item.id !== signatory.id)
+  showFeedback('Signatory removed.')
+}
+
+onMounted(loadLibraries)
 </script>
 
 <template>
@@ -131,6 +350,124 @@ const demoDangerAction = (action) => {
                 placeholder="Client ID from Google Cloud Console"></label>
             <div class="info-box">Google client secrets must stay on your backend and should never be saved in Vue or a
               VITE_ variable.</div>
+          </section>
+        </div>
+
+        <div v-else-if="activeTab === 'libraries'" class="library-stack">
+          <p v-if="libraryError" class="error-box" role="alert">{{ libraryError }}</p>
+          <p v-if="libraryLoading" class="info-box">Loading libraries...</p>
+
+          <section class="library-section">
+            <div class="settings-card">
+              <h2>{{ editingProgramId ? 'Edit Program' : 'Add Program' }}</h2>
+              <form class="form-grid" @submit.prevent="saveProgram">
+                <label>Program Name *<input v-model="programForm.name" type="text"></label>
+                <label>Program Code<input v-model="programForm.code" type="text"></label>
+                <label class="sm:col-span-2">Description<textarea v-model="programForm.description" rows="3"></textarea></label>
+                <label class="sm:col-span-2">Memo Feedback Timeline<input v-model="programForm.memo_feedback_timeline"
+                    type="text" placeholder="fifteen (15) days"></label>
+                <div class="form-actions sm:col-span-2">
+                  <button v-if="editingProgramId" type="button" class="secondary-button" @click="resetProgramForm">Cancel</button>
+                  <button type="submit" class="primary-button" :disabled="savingLibrary">{{ editingProgramId ? 'Update' : 'Save' }} Program</button>
+                </div>
+              </form>
+            </div>
+            <div class="settings-card">
+              <h2>Programs</h2>
+              <div class="library-list">
+                <article v-for="program in programs" :key="program.id" class="library-item">
+                  <div>
+                    <strong>{{ program.name }}</strong>
+                    <span>{{ program.code || 'No code' }}</span>
+                    <p>{{ program.description || 'No description.' }}</p>
+                  </div>
+                  <div class="row-actions">
+                    <button type="button" @click="editProgram(program)">Edit</button>
+                    <button type="button" class="danger-link" @click="deleteProgram(program)">Remove</button>
+                  </div>
+                </article>
+                <p v-if="!programs.length" class="empty-text">No programs found.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="library-section">
+            <div class="settings-card">
+              <h2>{{ editingCaseCategoryId ? 'Edit Case Category' : 'Add Case Category' }}</h2>
+              <form class="form-grid" @submit.prevent="saveCaseCategory">
+                <label class="sm:col-span-2">Category Name *<input v-model="caseCategoryForm.name" type="text"></label>
+                <label class="sm:col-span-2">Description<textarea v-model="caseCategoryForm.description" rows="3"></textarea></label>
+                <div class="sm:col-span-2">
+                  <p class="field-title">Subcategories</p>
+                  <div v-for="(subcategory, index) in caseCategoryForm.subcategories" :key="index" class="subcategory-row">
+                    <input v-model="subcategory.name" type="text" placeholder="Subcategory name">
+                    <button type="button" class="secondary-button" @click="removeSubcategory(index)">Remove</button>
+                  </div>
+                  <button type="button" class="secondary-button" @click="addSubcategory">Add Subcategory</button>
+                </div>
+                <div class="form-actions sm:col-span-2">
+                  <button v-if="editingCaseCategoryId" type="button" class="secondary-button" @click="resetCaseCategoryForm">Cancel</button>
+                  <button type="submit" class="primary-button" :disabled="savingLibrary">{{ editingCaseCategoryId ? 'Update' : 'Save' }} Category</button>
+                </div>
+              </form>
+            </div>
+            <div class="settings-card">
+              <h2>Case Categories</h2>
+              <div class="library-list">
+                <article v-for="category in caseCategories" :key="category.id" class="library-item">
+                  <div>
+                    <strong>{{ category.name }}</strong>
+                    <p>{{ category.description || 'No description.' }}</p>
+                    <span>{{ category.subcategories?.map((subcategory) => subcategory.name).join(', ') || 'No subcategories' }}</span>
+                  </div>
+                  <div class="row-actions">
+                    <button type="button" @click="editCaseCategory(category)">Edit</button>
+                    <button type="button" class="danger-link" @click="deleteCaseCategory(category)">Remove</button>
+                  </div>
+                </article>
+                <p v-if="!caseCategories.length" class="empty-text">No case categories found.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="library-section">
+            <div class="settings-card">
+              <h2>{{ editingSignatoryId ? 'Edit Signatory' : 'Add Signatory' }}</h2>
+              <form class="form-grid" @submit.prevent="saveSignatory">
+                <label>Full Name *<input v-model="signatoryForm.name" type="text"></label>
+                <label>Position *<input v-model="signatoryForm.position" type="text"></label>
+                <label class="sm:col-span-2">Office *<input v-model="signatoryForm.office" type="text"></label>
+                <label class="sm:col-span-2">E-Signature Image<input type="file" accept="image/png,image/jpeg,image/webp"
+                    @change="onEsignChange"></label>
+                <div class="toggle-grid sm:col-span-2">
+                  <label><input v-model="signatoryForm.is_active" type="checkbox"> Active</label>
+                  <label><input v-model="signatoryForm.is_recipient" type="checkbox"> Recipient</label>
+                  <label><input v-model="signatoryForm.is_originator" type="checkbox"> Originator</label>
+                </div>
+                <div class="form-actions sm:col-span-2">
+                  <button v-if="editingSignatoryId" type="button" class="secondary-button" @click="resetSignatoryForm">Cancel</button>
+                  <button type="submit" class="primary-button" :disabled="savingLibrary">{{ editingSignatoryId ? 'Update' : 'Save' }} Signatory</button>
+                </div>
+              </form>
+            </div>
+            <div class="settings-card">
+              <h2>Signatories</h2>
+              <div class="library-list">
+                <article v-for="signatory in signatories" :key="signatory.id" class="library-item signatory-item">
+                  <img v-if="signatory.esign_url" :src="signatory.esign_url" alt="" class="esign-preview">
+                  <div>
+                    <strong>{{ signatory.name }}</strong>
+                    <span>{{ signatory.position }} · {{ signatory.office }}</span>
+                    <p>{{ signatory.is_active ? 'Active' : 'Inactive' }}{{ signatory.is_recipient ? ' · Recipient' : '' }}{{ signatory.is_originator ? ' · Originator' : '' }}</p>
+                  </div>
+                  <div class="row-actions">
+                    <button type="button" @click="editSignatory(signatory)">Edit</button>
+                    <button type="button" class="danger-link" @click="deleteSignatory(signatory)">Remove</button>
+                  </div>
+                </article>
+                <p v-if="!signatories.length" class="empty-text">No signatories found.</p>
+              </div>
+            </div>
           </section>
         </div>
 
@@ -417,6 +754,16 @@ export default { components: { SettingToggle } }
   gap: 1.25rem
 }
 
+.library-stack {
+  display: grid;
+  gap: 1.25rem
+}
+
+.library-section {
+  display: grid;
+  gap: 1.25rem
+}
+
 .settings-card {
   border: 1px solid rgb(255 255 255/60%);
   border-radius: 1rem;
@@ -449,6 +796,7 @@ export default { components: { SettingToggle } }
 
 .form-grid input,
 .form-grid select,
+.form-grid textarea,
 .block-label input {
   width: 100%;
   border: 1px solid #d1d5db;
@@ -461,15 +809,157 @@ export default { components: { SettingToggle } }
 
 .form-grid input:focus,
 .form-grid select:focus,
+.form-grid textarea:focus,
 .block-label input:focus {
   border-color: #c9a83e;
   box-shadow: 0 0 0 3px rgb(201 168 62/15%)
+}
+
+.form-grid textarea {
+  min-height: 5.5rem;
+  resize: vertical
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .75rem
+}
+
+.secondary-button {
+  border: 1px solid #e5e7eb;
+  border-radius: .75rem;
+  padding: .625rem 1rem;
+  color: #4b5563;
+  font-size: .875rem
+}
+
+.secondary-button:hover {
+  background: #f8fafc
+}
+
+.primary-button:disabled {
+  cursor: wait;
+  opacity: .7
 }
 
 .field-title {
   margin-bottom: .5rem;
   font-size: .8rem;
   font-weight: 500
+}
+
+.library-list {
+  display: grid;
+  gap: .75rem
+}
+
+.library-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid #eef2f7;
+  border-radius: .85rem;
+  background: #f8fafc;
+  padding: .85rem
+}
+
+.library-item strong,
+.library-item span,
+.library-item p {
+  display: block
+}
+
+.library-item strong {
+  color: #1f2937;
+  font-size: .875rem
+}
+
+.library-item span {
+  margin-top: .2rem;
+  color: #64748b;
+  font-size: .75rem
+}
+
+.library-item p {
+  margin-top: .35rem;
+  color: #6b7280;
+  font-size: .78rem;
+  line-height: 1.45
+}
+
+.row-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: .55rem
+}
+
+.row-actions button {
+  color: #1e40af;
+  font-size: .78rem;
+  font-weight: 600
+}
+
+.row-actions .danger-link {
+  color: #b91c1c
+}
+
+.subcategory-row {
+  display: flex;
+  gap: .5rem;
+  margin-bottom: .5rem
+}
+
+.subcategory-row input {
+  flex: 1;
+  border: 1px solid #d1d5db;
+  border-radius: .75rem;
+  padding: .625rem .75rem;
+  outline: none
+}
+
+.toggle-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem
+}
+
+.toggle-grid label {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  color: #475569;
+  font-size: .8rem;
+  font-weight: 600
+}
+
+.signatory-item {
+  align-items: center
+}
+
+.esign-preview {
+  width: 5rem;
+  height: 3rem;
+  flex-shrink: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: .5rem;
+  background: white;
+  object-fit: contain
+}
+
+.empty-text {
+  color: #94a3b8;
+  font-size: .8rem
+}
+
+.error-box {
+  border: 1px solid #fecaca;
+  border-radius: .75rem;
+  background: #fef2f2;
+  padding: .75rem;
+  color: #b91c1c;
+  font-size: .8rem
 }
 
 .theme-button {
@@ -673,7 +1163,8 @@ export default { components: { SettingToggle } }
 }
 
 @media(min-width:1024px) {
-  .section-grid {
+  .section-grid,
+  .library-section {
     grid-template-columns: repeat(2, minmax(0, 1fr))
   }
 }
@@ -703,4 +1194,3 @@ export default { components: { SettingToggle } }
   }
 }
 </style>
-
