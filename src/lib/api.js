@@ -17,7 +17,7 @@ function getCookie(name) {
 }
 
 async function refreshCsrfCookie() {
-  await fetch(`${apiBaseUrl}/auth/user`, {
+  await fetch(`${apiBaseUrl}/auth/csrf-cookie`, {
     credentials: 'include',
     headers: {
       Accept: 'application/json',

@@ -65,7 +65,6 @@ const initials = computed(() => {
   const last = parts.length > 1 ? parts[parts.length - 1][0] : (parts[0]?.[1] || 'S')
   return `${first}${last}`.toUpperCase()
 })
-const verifiedAt = computed(() => formatDate(user.value.email_verified_at))
 const createdAt = computed(() => formatDate(user.value.created_at, 'Joined date unavailable'))
 const updatedAt = computed(() => formatDate(user.value.updated_at, 'No recent update available'))
 

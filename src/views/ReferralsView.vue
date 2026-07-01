@@ -198,7 +198,7 @@ const sanitizeHtml = (html, fallback = 'N/A') => {
   const document = new DOMParser().parseFromString(String(html), 'text/html')
   document.querySelectorAll('script, style, iframe, object, embed, link, meta').forEach((element) => element.remove())
   document.body.querySelectorAll('*').forEach((element) => {
-    for (const attribute of [...element.attributes]) {
+    for (const attribute of element.attributes) {
       const name = attribute.name.toLowerCase()
       const value = attribute.value.trim().toLowerCase()
       if (name.startsWith('on') || value.startsWith('javascript:')) {

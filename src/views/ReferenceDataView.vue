@@ -18,9 +18,9 @@ const caseCategories = ref([])
 const signatories = ref([])
 
 const tabs = [
-  { id: 'programs', label: 'Programs' },
-  { id: 'categories', label: 'Case Categories' },
-  { id: 'signatories', label: 'Signatories' },
+  { id: 'programs', label: 'Programs', itemLabel: 'Program' },
+  { id: 'categories', label: 'Case Categories', itemLabel: 'Category' },
+  { id: 'signatories', label: 'Signatories', itemLabel: 'Signatory' },
 ]
 
 const programForm = reactive({ name: '', code: '', description: '', memo_feedback_timeline: '' })
@@ -271,7 +271,7 @@ onMounted(loadReferenceData)
 
     <section class="layout">
       <form class="card form-card" @submit.prevent="saveActive">
-        <h2>{{ editingId ? 'Edit' : 'Add' }} {{ activeTab.label.replace(/s$/, '') }}</h2>
+        <h2>{{ editingId ? 'Edit' : 'Add' }} {{ activeTab.itemLabel }}</h2>
 
         <template v-if="activeType === 'programs'">
           <label>Program Name *<input v-model="programForm.name" type="text" required></label>
