@@ -1,8 +1,6 @@
 <script setup>
 import ClassicEditor from '@ckeditor/ckeditor5-build-classic'
 import { Ckeditor } from '@ckeditor/ckeditor5-vue'
-import html2canvas from 'html2canvas-pro'
-import { jsPDF } from 'jspdf'
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppSidebar from '../components/AppSidebar.vue'
@@ -36,7 +34,8 @@ const serviceError = ref('')
 
 const referrals = ref([])
 const selectedReferral = ref(null)
-const memoDocument = ref(null)
+const memoPreviewSource = ref(null)
+const memoPreviewPages = ref([])
 const programs = ref([])
 const caseCategories = ref([])
 const partyRoles = ref([
@@ -497,10 +496,145 @@ const deleteService = async (service) => {
 }
 const openMemoPreview = () => {
   isMemoPreviewOpen.value = true
+  renderMemoPreviewPages()
 }
 const openPdf = (file) => {
   if (!file?.file_url) return
   window.open(file.file_url, '_blank', 'noopener,noreferrer')
+}
+const createMemoMeasurePage = () => {
+  const page = document.createElement('div')
+  page.className = 'memo-content memo-preview-page memo-preview-measure-page'
+  Object.assign(page.style, {
+    position: 'fixed',
+    top: '0',
+    left: '-10000px',
+    width: '8.5in',
+    height: '11in',
+    boxSizing: 'border-box',
+    overflow: 'hidden',
+    margin: '0',
+    padding: '.5in',
+    background: 'white',
+    color: '#000',
+    fontFamily: 'Inter, Arial, sans-serif',
+    fontSize: '16px',
+    visibility: 'hidden',
+    pointerEvents: 'none',
+    zIndex: '-1',
+  })
+  document.body.appendChild(page)
+
+  return page
+}
+const renderMemoPreviewPages = async () => {
+  memoPreviewPages.value = []
+  await nextTick()
+
+  const source = memoPreviewSource.value
+  if (!source) return
+
+  const scopeAttrs = source.getAttributeNames().filter((name) => name.startsWith('data-v-'))
+  const applyScope = (element) => {
+    scopeAttrs.forEach((name) => element.setAttribute(name, ''))
+    return element
+  }
+  let currentPage = createMemoMeasurePage()
+  let currentBody = null
+  let currentTable = null
+  let currentTbody = null
+  const pages = []
+
+  const finishPage = () => {
+    if (currentPage?.childElementCount) pages.push(currentPage.innerHTML)
+    currentPage?.remove()
+  }
+  const startPage = () => {
+    finishPage()
+    currentPage = createMemoMeasurePage()
+    currentBody = null
+    currentTable = null
+    currentTbody = null
+  }
+  const overflows = () => currentPage.scrollHeight > currentPage.clientHeight + 2
+  const appendToPage = (node) => {
+    const clone = node.cloneNode(true)
+    currentPage.appendChild(clone)
+
+    if (overflows() && currentPage.childElementCount > 1) {
+      clone.remove()
+      startPage()
+      currentPage.appendChild(clone)
+    }
+
+    currentBody = null
+    currentTable = null
+    currentTbody = null
+  }
+  const ensureBody = () => {
+    if (!currentBody) {
+      currentBody = applyScope(document.createElement('div'))
+      currentBody.className = 'memo-body'
+      currentPage.appendChild(currentBody)
+    }
+
+    return currentBody
+  }
+  const appendToBody = (node) => {
+    const body = ensureBody()
+    const clone = node.cloneNode(true)
+    body.appendChild(clone)
+
+    if (overflows() && body.childElementCount > 1) {
+      clone.remove()
+      startPage()
+      ensureBody().appendChild(clone)
+    }
+
+    currentTable = null
+    currentTbody = null
+  }
+  const ensureTable = () => {
+    const body = ensureBody()
+    if (!currentTable) {
+      currentTable = applyScope(document.createElement('table'))
+      currentTable.className = 'memo-table'
+      currentTbody = applyScope(document.createElement('tbody'))
+      currentTable.appendChild(currentTbody)
+      body.appendChild(currentTable)
+    }
+
+    return currentTbody
+  }
+  const appendTableRow = (row) => {
+    const tbody = ensureTable()
+    const clone = row.cloneNode(true)
+    tbody.appendChild(clone)
+
+    if (overflows() && tbody.children.length > 1) {
+      clone.remove()
+      startPage()
+      ensureTable().appendChild(clone)
+    }
+  }
+
+  for (const child of source.children) {
+    if (!child.classList.contains('memo-body')) {
+      appendToPage(child)
+      continue
+    }
+
+    for (const bodyChild of child.children) {
+      if (bodyChild.classList.contains('memo-table')) {
+        for (const row of bodyChild.querySelectorAll('tbody > tr')) appendTableRow(row)
+      } else {
+        appendToBody(bodyChild)
+      }
+    }
+  }
+
+  finishPage()
+  memoPreviewPages.value = pages.length ? pages : [source.innerHTML]
 }
 const generateMemoPdf = async () => {
   if (!selectedReferral.value?.id) return
@@ -526,44 +660,10 @@ const generateNewMemoPdf = async () => {
   isMemoPreviewOpen.value = true
 
   try {
-    await nextTick()
-    const element = memoDocument.value
-    if (!element) throw new Error('Memo template is not ready.')
-
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      backgroundColor: '#ffffff',
-      useCORS: true,
-      logging: false,
-    })
-    const pdf = new jsPDF('p', 'mm', 'a4')
-    const pageWidth = pdf.internal.pageSize.getWidth()
-    const pageHeight = pdf.internal.pageSize.getHeight()
-    const imageWidth = pageWidth
-    const imageHeight = (canvas.height * imageWidth) / canvas.width
-    const imageData = canvas.toDataURL('image/png')
-    let heightLeft = imageHeight
-    let position = 0
-
-    pdf.addImage(imageData, 'PNG', 0, position, imageWidth, imageHeight)
-    heightLeft -= pageHeight
-
-    while (heightLeft > 0) {
-      position -= pageHeight
-      pdf.addPage()
-      pdf.addImage(imageData, 'PNG', 0, position, imageWidth, imageHeight)
-      heightLeft -= pageHeight
-    }
-
-    const blob = pdf.output('blob')
-    const filename = `MEMO_${String(selectedReferral.value.drn || selectedReferral.value.id).replace(/[^\w-]+/g, '_')}_${Date.now()}.pdf`
-    const file = new File([blob], filename, { type: 'application/pdf' })
-    const formData = new FormData()
-    formData.append('memo', file, filename)
+    await renderMemoPreviewPages()
 
     const response = await request(`/auth/referrals/${selectedReferral.value.id}/memo`, {
       method: 'POST',
-      body: formData,
     })
     const payload = await parsePayload(response)
     if (!response.ok) {
@@ -1087,7 +1187,16 @@ onMounted(async () => {
         </div>
 
         <div class="memo-modal-content">
-          <div ref="memoDocument" class="memo-content">
+          <div v-if="memoPreviewPages.length" class="memo-preview-pages">
+            <div
+              v-for="(page, index) in memoPreviewPages"
+              :key="index"
+              class="memo-content memo-preview-page"
+              v-html="page"
+            ></div>
+          </div>
+
+          <div ref="memoPreviewSource" class="memo-content memo-preview-source">
             <div class="memo-agency-header">
               <div class="memo-agency-row">
                 <div class="memo-logo-wrap">
@@ -1946,13 +2055,17 @@ tbody tr:hover {
 .memo-pdf-block {
   display: grid;
   gap: .5rem;
+  min-width: 0;
   margin-top: 1rem
 }
 
 .memo-pdf-link {
   display: grid;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   gap: .15rem;
+  overflow: hidden;
   border: 1px solid #bfdbfe;
   border-radius: .75rem;
   background: #eff6ff;
@@ -1961,6 +2074,14 @@ tbody tr:hover {
   font-size: .85rem;
   font-weight: 700;
   text-align: left
+}
+
+.memo-pdf-link span,
+.memo-pdf-link small {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word
 }
 
 .memo-pdf-link:hover {
@@ -1982,16 +2103,32 @@ tbody tr:hover {
   background: #d1d1d1
 }
 
+.memo-preview-pages {
+  display: grid;
+  justify-items: center;
+  gap: 2rem
+}
+
 .memo-content {
   width: 8.5in;
-  min-height: 11in;
+  height: 11in;
   box-sizing: border-box;
   margin: 0 auto;
+  overflow: hidden;
   background: white;
   padding: .5in;
   color: #000;
   font-family: Inter, Arial, sans-serif;
   font-size: 16px
+}
+
+.memo-preview-source {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: -1
 }
 
 .memo-agency-header {
